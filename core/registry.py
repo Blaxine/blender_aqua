@@ -61,14 +61,6 @@ def _resolution_update(self, context):
             ds.resolution_max = int(self.base_resolution)
 
 
-def _rain_streams_update(self, context):
-    if self.mode != "SIMRAIN":
-        return
-    from ..level2 import rain_sim
-    rain_sim.rebuild_streams(self)
-    rain_sim.apply_rain_params(context, self)
-
-
 def _rain_params_update(self, context):
     if self.mode != "SIMRAIN":
         return
@@ -83,6 +75,16 @@ def _rain_domain_update(self, context):
     rain_sim.fit_domain(context, self)
     rain_sim.apply_rain_params(context, self)
     rain_sim.apply_quality(context, self)
+
+
+def _rain_area_update(self, context):
+    """Rain Area resizes the emitter plane itself, then refits the domain
+    around it — the slider changes where rain falls, not just the box."""
+    if self.mode != "SIMRAIN":
+        return
+    from ..level2 import rain_sim
+    rain_sim.apply_area(self)
+    _rain_domain_update(self, context)
 
 
 def _hose_params_update(self, context):
@@ -142,8 +144,9 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     pool_sources: CollectionProperty(type=AQS_PoolSourceEntry)
     rain_area: FloatProperty(
         name="Rain Area", default=4.0, min=1.0, max=30.0, subtype="DISTANCE",
-        update=_rain_domain_update,
-        description="Edge of the rained-on square (memory scales with area)")
+        update=_rain_area_update,
+        description="Edge of the rained-on square — resizes the emitter "
+                    "plane and the fitted domain (memory scales with area)")
     rain_speed: FloatProperty(
         name="Speed", default=9.0, min=1.0, max=20.0,
         update=_rain_params_update, description="Drop speed in m/s")
@@ -156,16 +159,6 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
         name="Direction", default=0.0, min=0.0, max=360.0,
         update=_rain_domain_update,
         description="Compass heading of the tilt (degrees)")
-    rain_auto_lifetime: BoolProperty(
-        name="Auto Life", default=True, update=_rain_params_update,
-        description="Derive drop lifetime from fall height and speed so "
-                    "drops die just past pool level. Turn off to set "
-                    "Lifetime manually")
-    rain_streams: IntProperty(
-        name="Rain Streams", default=14, min=1, max=100,
-        update=_rain_streams_update,
-        description="Number of falling streams (each breaks into drops). "
-                    "Changing this regenerates the nozzle layout")
     base_resolution: IntProperty(
         name="Resolution", default=96, min=16, max=512,
         update=_resolution_update,

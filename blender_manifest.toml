@@ -5,7 +5,7 @@ schema_version = "1.0.0"
 # __init__.py is used instead — the addon supports both.
 
 id = "aquasuite"
-version = "0.13.2"
+version = "0.13.3"
 name = "AquaSuite — Water FX"
 tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
 maintainer = "AquaSuite"

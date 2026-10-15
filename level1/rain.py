@@ -5,7 +5,7 @@ import bpy
 import bmesh
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 
 
@@ -83,6 +83,7 @@ class AQS_OT_rain_create(bpy.types.Operator):
     bl_description = "A plane that rains — press Play"
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()

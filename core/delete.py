@@ -7,12 +7,22 @@ effector modifiers) are restored from their recorded pre-state first,
 then every tagged ID is removed.
 """
 
+import functools
 import json
+import os
+import shutil
+import traceback
 
 import bpy
 
 from .. import constants as C
 from . import registry
+
+CACHE_ROOT = "aquasuite_cache"
+
+# Datablock collections that can carry an ``aqs_owner`` tag.
+_TAGGED_COLLECTIONS = ("objects", "meshes", "particles", "node_groups",
+                       "materials", "collections")
 
 
 def _restore_buoys(entry):
@@ -27,13 +37,25 @@ def _restore_buoys(entry):
                 obj.constraints.remove(con)
 
 
-def _restore_one_source(src, uuid):
+def _restore_one_source(src, uuid, hide_render, display_type):
+    """Undo what Still Water / Rain-Sim pools did to a user mesh.
+
+    The Flow modifier is found by TYPE, not name, so a renamed modifier is
+    still removed: Blender allows only one Fluid modifier per object and
+    Create refuses sources that already carry one (R1.4), so any Fluid
+    FLOW on a marked source is ours.
+    """
     if src is None:
         return
-    src.hide_render = False  # overwritten below by the recorded value
-    for mod in list(src.modifiers):
-        if mod.type == "FLUID" and mod.name.startswith("AQS"):
-            src.modifiers.remove(mod)
+    src.hide_render = hide_render
+    try:
+        src.display_type = display_type or "TEXTURED"
+    except TypeError:
+        src.display_type = "TEXTURED"
+    if str(src.get(C.SRC_PROP, "")).endswith(uuid):
+        for mod in list(src.modifiers):
+            if mod.type == "FLUID" and getattr(mod, "fluid_type", "") == "FLOW":
+                src.modifiers.remove(mod)
     for prop in (C.SRC_PROP, C.OWNER_PROP):
         if str(src.get(prop, "")).endswith(uuid):
             del src[prop]
@@ -42,38 +64,20 @@ def _restore_one_source(src, uuid):
 def _restore_source(entry):
     # Rain-Sim pool sources (each with its own recorded pre-state)
     for rec in getattr(entry, "pool_sources", []):
-        src = rec.obj
-        if src is None:
-            continue
-        _restore_one_source(src, entry.uuid)
-        src.hide_render = rec.hide_render
-        try:
-            src.display_type = rec.display_type or "TEXTURED"
-        except TypeError:
-            src.display_type = "TEXTURED"
-
-    src = entry.source
-    if src is None:
-        return
-    src.hide_render = entry.src_hide_render
-    try:
-        src.display_type = entry.src_display_type or "TEXTURED"
-    except TypeError:
-        src.display_type = "TEXTURED"
-    # Remove ONLY the Flow modifier AquaSuite added to the source (by our
-    # modifier name — a user Fluid modifier can't exist here, since Create
-    # refuses sources that already carry one, R1.4).
-    for mod in list(src.modifiers):
-        if mod.type == "FLUID" and mod.name.startswith("AQS"):
-            src.modifiers.remove(mod)
-    for prop in (C.SRC_PROP, C.OWNER_PROP):
-        if str(src.get(prop, "")).endswith(entry.uuid):
-            del src[prop]
+        _restore_one_source(rec.obj, entry.uuid, rec.hide_render,
+                            rec.display_type)
+    _restore_one_source(entry.source, entry.uuid, entry.src_hide_render,
+                        entry.src_display_type)
 
 
 def _release_effectors(assembly_uuid):
     """Decrement effector refcounts; remove modifiers whose owner list empties
-    (R1.4 / §5.3b)."""
+    (R1.4 / §5.3b).
+
+    The owner list is only ever written on objects whose Effector AquaSuite
+    created, so the modifier is identified by type — renaming it no longer
+    strands it on the user's object.
+    """
     for obj in bpy.data.objects:
         raw = obj.get(C.EFFECTOR_OWNERS_PROP)
         if not raw:
@@ -90,8 +94,7 @@ def _release_effectors(assembly_uuid):
             continue
         for mod in list(obj.modifiers):
             if (mod.type == "FLUID"
-                    and getattr(mod, "fluid_type", "") == "EFFECTOR"
-                    and mod.name.startswith("AQS")):
+                    and getattr(mod, "fluid_type", "") == "EFFECTOR"):
                 obj.modifiers.remove(mod)
         del obj[C.EFFECTOR_OWNERS_PROP]
 
@@ -106,7 +109,51 @@ def _remove_tagged(data_iterable, assembly_uuid, remover):
                 pass
 
 
-def delete_assembly(scene, assembly_uuid):
+# --------------------------------------------------------------------------
+# Bake cache on disk
+# --------------------------------------------------------------------------
+
+def cache_dir(assembly_uuid):
+    """Absolute path of this assembly's default bake cache, or None when the
+    .blend is unsaved (``//`` would not point next to a file)."""
+    if not bpy.data.filepath or not assembly_uuid:
+        return None
+    return bpy.path.abspath(f"//{CACHE_ROOT}/{assembly_uuid}")
+
+
+def cache_size_mb(assembly_uuid):
+    path = cache_dir(assembly_uuid)
+    if path is None or not os.path.isdir(path):
+        return 0.0
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total / (1024 * 1024)
+
+
+def remove_cache(assembly_uuid):
+    """Delete ``//aquasuite_cache/<uuid>`` — only that exact folder, and only
+    when it really sits inside the cache root next to the .blend."""
+    path = cache_dir(assembly_uuid)
+    if path is None or not os.path.isdir(path):
+        return False
+    root = os.path.normcase(os.path.abspath(bpy.path.abspath(f"//{CACHE_ROOT}")))
+    target = os.path.normcase(os.path.abspath(path))
+    if os.path.dirname(target) != root:
+        return False
+    shutil.rmtree(path, ignore_errors=True)
+    return True
+
+
+# --------------------------------------------------------------------------
+# Teardown
+# --------------------------------------------------------------------------
+
+def delete_assembly(scene, assembly_uuid, delete_cache=False):
     entry = registry.get(scene, assembly_uuid)
     if entry is not None:
         _restore_buoys(entry)
@@ -123,7 +170,46 @@ def delete_assembly(scene, assembly_uuid):
 
     registry.remove(scene, assembly_uuid)
 
+    if delete_cache:
+        remove_cache(assembly_uuid)
+
     # Prune the root collection if it is now empty.
     root = d.collections.get(C.ROOT_COLLECTION)
     if root is not None and not root.children and not root.objects:
         d.collections.remove(root)
+
+
+def _owner_uuids():
+    found = set()
+    for coll in _TAGGED_COLLECTIONS:
+        for id_block in getattr(bpy.data, coll):
+            v = id_block.get(C.OWNER_PROP, "")
+            if isinstance(v, str) and ":" in v:
+                found.add(v.rsplit(":", 1)[1])
+    return found
+
+
+def guarded_create(execute):
+    """Decorator for Create operators.
+
+    An operator that returns CANCELLED (or raises) does NOT roll back what
+    it already built, and a half-built assembly has no registry entry — so
+    no Delete button.  On failure, sweep every assembly uuid that appeared
+    during this call through the normal teardown.
+    """
+    @functools.wraps(execute)
+    def wrapper(self, context):
+        before = _owner_uuids()
+        try:
+            result = execute(self, context)
+        except Exception as exc:
+            traceback.print_exc()
+            self.report({"ERROR"},
+                        f"AquaSuite: creation failed: {exc} "
+                        "(full traceback in the System Console)")
+            result = {"CANCELLED"}
+        if "CANCELLED" in result:
+            for u in _owner_uuids() - before:
+                delete_assembly(context.scene, u)
+        return result
+    return wrapper

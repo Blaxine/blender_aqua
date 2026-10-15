@@ -14,7 +14,7 @@ import bmesh
 from mathutils import Vector
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 
 RES_PRESETS = {"PREVIEW": 48, "MEDIUM": 96, "HIGH": 160, "ULTRA": 256}
@@ -26,6 +26,22 @@ def _safe(o, attr, value):
             setattr(o, attr, value)
         except Exception as exc:
             print(f"[AquaSuite] could not set {attr}: {exc}")
+
+
+def set_flag(o, attr, value):
+    """Write a bool only when it differs from the current value.
+
+    Blender's secondary-particle switches (use_spray/foam/bubble_particles)
+    TOGGLE on every write, whatever value is written: writing False to an
+    off flag turns it ON (verified on 4.1 and 5.1).  Never write them
+    directly — always go through this helper.
+    """
+    if hasattr(o, attr) and bool(getattr(o, attr)) != bool(value):
+        _safe(o, attr, value)
+
+
+SECONDARY_FLAGS = ("use_spray_particles", "use_foam_particles",
+                   "use_bubble_particles")
 
 
 def world_bbox(obj):
@@ -68,9 +84,8 @@ def setup_domain_settings(dom_mod, uid, resolution, cfl=4.0,
     _safe(ds, "cfl_condition", cfl)
     _safe(ds, "timesteps_min", ts_min)
     _safe(ds, "timesteps_max", ts_max)
-    _safe(ds, "use_spray_particles", secondaries)
-    _safe(ds, "use_foam_particles", secondaries)
-    _safe(ds, "use_bubble_particles", secondaries)
+    for flag in SECONDARY_FLAGS:
+        set_flag(ds, flag, secondaries)
     _safe(ds, "cache_type", "MODULAR")
     _safe(ds, "cache_data_format", "OPENVDB")
     ds.cache_directory = f"//aquasuite_cache/{uid}"
@@ -93,14 +108,18 @@ def add_effectors(scene, domain, uid, report=None):
         has_collision = any(m.type == "COLLISION" for m in obj.modifiers)
         if not has_collision:
             continue
+        if C.SRC_PROP in obj.keys():
+            continue  # an AquaSuite liquid source — its Flow is ours, not a conflict
         fluid = next((m for m in obj.modifiers if m.type == "FLUID"), None)
         if fluid is not None:
             if fluid.fluid_type != "EFFECTOR":
                 skipped.append(obj.name)      # Flow/Domain conflict -> skip
                 continue
-            if not fluid.name.startswith("AQS"):
+            if C.EFFECTOR_OWNERS_PROP not in obj.keys():
                 # A USER-made effector: it already works as an obstacle.
-                # Do not refcount, never touch, never remove.
+                # Do not refcount, never touch, never remove.  (Ownership
+                # is the owner list, never the modifier name — renaming
+                # our modifier must not turn it into "user" data.)
                 continue
         if fluid is None:
             fluid = obj.modifiers.new("AQS Effector", "FLUID")
@@ -130,9 +149,11 @@ def refresh_obstacles(scene, entry, report=None):
     assembly was created become real obstacles, matching the universal
     'Collision = obstacle' rule instead of a create-time snapshot.
 
-    Also sets each AQS effector's surface_distance to ~1 voxel of this
-    domain, so thin walls (thinner than a voxel) stop leaking.
-    Returns the number of live effectors intersecting the domain.
+    Also sets each of THIS assembly's effectors' surface_distance to ~1
+    voxel of this domain, so thin walls (thinner than a voxel) stop
+    leaking.  Effectors owned only by other assemblies are left alone; a
+    shared one keeps the thicker of the two values so it stays leak-proof
+    for both domains.  Returns the number of effectors this assembly owns.
     """
     dom = find_domain_object(entry)
     if dom is None:
@@ -150,13 +171,22 @@ def refresh_obstacles(scene, entry, report=None):
         raw = obj.get(C.EFFECTOR_OWNERS_PROP)
         if not raw:
             continue
+        try:
+            owners = json.loads(raw)
+        except Exception:
+            owners = []
+        if entry.uuid not in owners:
+            continue
+        shared = len(owners) > 1
         for mod in obj.modifiers:
             if mod.type == "FLUID" \
-                    and getattr(mod, "fluid_type", "") == "EFFECTOR" \
-                    and mod.name.startswith("AQS"):
+                    and getattr(mod, "fluid_type", "") == "EFFECTOR":
                 es = mod.effector_settings
                 _safe(es, "use_effector", True)
-                _safe(es, "surface_distance", thickness)
+                value = thickness
+                if shared and hasattr(es, "surface_distance"):
+                    value = max(es.surface_distance, thickness)
+                _safe(es, "surface_distance", value)
                 count += 1
     return count
 
@@ -184,6 +214,7 @@ class AQS_OT_still_water_create(bpy.types.Operator):
             and C.OWNER_PROP not in obj.keys() \
             and C.SRC_PROP not in obj.keys()
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         src = context.active_object
@@ -266,6 +297,19 @@ def find_domain_object(entry):
 
 import contextlib
 
+MEMORY_CONFIRM_GB = 2.0
+
+
+def estimated_memory_gb(entry):
+    """RAM estimate from the ACTUAL fitted domain and effective resolution
+    — the honest number, not a resolution rule of thumb."""
+    from .rain_sim import memory_estimate
+    dom = find_domain_object(entry)
+    dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
+        if dom else None
+    res = dmod.domain_settings.resolution_max if dmod else 0
+    return memory_estimate(dom, res)[1]
+
 
 @contextlib.contextmanager
 def _fluid_op_override(context, dom):
@@ -317,6 +361,27 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
 
     uuid: bpy.props.StringProperty()
 
+    def invoke(self, context, event):
+        """Above the RAM threshold, ask before baking.  A warning that the
+        bake starts anyway (and that the next status message hides) is no
+        protection against an out-of-memory crash."""
+        try:
+            gb = estimated_memory_gb(registry.get(context.scene, self.uuid))
+        except Exception:
+            gb = 0.0
+        if gb <= MEMORY_CONFIRM_GB:
+            return self.execute(context)
+        msg = C.MSG["W022"].format(gb=gb)
+        wm = context.window_manager
+        try:
+            return wm.invoke_confirm(self, event,
+                                     title="Bake with this much memory?",
+                                     message=msg, confirm_text="Bake Anyway",
+                                     icon="WARNING")
+        except TypeError:  # older API without a custom message
+            self.report({"WARNING"}, "AQS-W022: " + msg)
+            return wm.invoke_confirm(self, event)
+
     def execute(self, context):
         if not bpy.data.filepath:
             self.report({"ERROR"}, "AQS-E020: " + C.MSG["E020"])
@@ -350,13 +415,11 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
         except Exception as exc:
             print(f"[AquaSuite] obstacle refresh warning: {exc}")
 
-        # RAM guard: estimate the grid from the ACTUAL fitted domain and
-        # resolution — the honest number, not a resolution rule of thumb.
+        # RAM guard (the UI path already confirmed in invoke(); this keeps
+        # scripted calls informed too).
         try:
-            from .rain_sim import memory_estimate
-            res = dmod.domain_settings.resolution_max if dmod else 0
-            _mcells, gb = memory_estimate(dom, res)
-            if gb > 2.0:
+            gb = estimated_memory_gb(entry)
+            if gb > MEMORY_CONFIRM_GB:
                 self.report({"WARNING"},
                             "AQS-W022: " + C.MSG["W022"].format(gb=gb))
         except Exception:

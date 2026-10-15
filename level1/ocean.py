@@ -19,7 +19,7 @@ from bpy.props import StringProperty
 
 from .. import constants as C
 from .. import gerstner
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 
 MODIFIER_NAME = "AquaSuite Ocean"
@@ -167,12 +167,23 @@ def build_ocean_tree(mode, uuid_):
 # Modifier input IO (identifier-tolerant)
 # --------------------------------------------------------------------------
 
-def find_ocean_modifier(obj):
+def find_ocean_modifier(obj, assembly_uuid=None):
+    """The GN modifier running an AquaSuite ocean tree.
+
+    Identified by the node group's ``aqs_owner`` tag, never its name —
+    users may rename the tree (README: "Names are yours").  With
+    ``assembly_uuid`` only that assembly's tree matches.
+    """
     if obj is None:
         return None
     for mod in obj.modifiers:
-        if mod.type == "NODES" and mod.node_group and \
-                mod.node_group.name.startswith(NG_NAME):
+        if mod.type != "NODES" or mod.node_group is None:
+            continue
+        owner = mod.node_group.get(C.OWNER_PROP, "")
+        if not isinstance(owner, str) \
+                or not owner.startswith(C.MODE_OCEAN + ":"):
+            continue
+        if assembly_uuid is None or owner.endswith(":" + assembly_uuid):
             return mod
     return None
 
@@ -227,6 +238,7 @@ class AQS_OT_ocean_create(bpy.types.Operator):
     bl_description = "One-click Gerstner ocean surface with buoy support"
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()

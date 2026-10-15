@@ -6,10 +6,15 @@ raise ripples in pool water because drops and pools are the SAME fluid
 in one FLIP solve — no faked ripple layer.
 
 Architecture:
-  * Seed particles (hidden, cheap) define drop positions/velocities;
-    a Fluid FLOW modifier with flow_source='PARTICLES' stamps liquid at
-    each seed, inheriting its velocity → falling droplets.
-  * Angle / Direction / Speed drive the seed velocity vector.
+  * The emitter is a plane carrying a Geometry Nodes "drop field": points
+    scattered on the plane, each moved along the rain velocity with a
+    per-point random phase that wraps at Fall Distance, instanced as
+    small streak spheres and REALIZED into real mesh.
+  * A Fluid FLOW (mesh source, INFLOW behaviour) on the same plane stamps
+    liquid wherever a drop is, every frame, with the rain velocity as
+    initial velocity → falling droplets that splash.
+  * Angle / Direction / Speed drive the drop velocity vector; Rain Area
+    sizes the emitter plane and the fitted domain together.
   * A per-assembly Pool collection: user meshes added to it become
     liquid volumes under the SAME rules as Still Water (source hidden,
     never converted, restore records, R1.4 conflict policy).
@@ -18,10 +23,10 @@ Architecture:
 Memory pitfalls engineered around (the ones that take Blender down):
   1. Domain volume — fitted to the pools + fall column, never a big
      generic box; small default Area (4 m).
-  2. Seed lifetime — seeds are killed just after reaching pool level,
-     otherwise they keep stamping liquid UNDERWATER (invisible jets
-     that churn the pool and multiply FLIP particle counts).
-  3. Live cell/RAM estimate in the panel with a hard warning before
+  2. Fall Distance — drops wrap back to the ceiling just past pool
+     level, otherwise they keep stamping liquid UNDERWATER (invisible
+     jets that churn the pool and multiply FLIP particle counts).
+  3. Live cell/RAM estimate in the panel, and a confirmation before
      bakes that would realistically exhaust memory.
 """
 
@@ -32,7 +37,7 @@ import bmesh
 from mathutils import Vector
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 from ..level1 import rain as rain_mod
 from ..level1 import ocean as gn_io   # generic GN-modifier input get/set
@@ -51,30 +56,32 @@ def _safe(o, attr, value):
 # Lookups (rename-safe: by modifier/data type, never by name)
 # ----------------------------------------------------------------------
 
+def _is_drop_tree(ng, assembly_uuid):
+    """The drop-field tree is the only GN tree a Rain Sim assembly tags, so
+    the owner tag identifies it — the user may rename it freely."""
+    return ng is not None and naming.owned_by(ng, assembly_uuid)
+
+
 def find_emitter(entry):
     """The rain emitter carries a GN drop-field modifier plus a Fluid
-    FLOW; pool sources have neither."""
+    FLOW; pool sources have no drop field."""
     col = entry.root_collection
     if col is None:
         return None
     for obj in col.all_objects:
-        has_gn = any(m.type == "NODES" and m.node_group
-                     and m.node_group.name.startswith("AQS_GN_RainDrops")
-                     for m in obj.modifiers)
-        has_flow = any(m.type == "FLUID"
-                       and getattr(m, "fluid_type", "") == "FLOW"
-                       for m in obj.modifiers)
-        if has_gn and has_flow:
+        if _drops_modifier(obj, entry.uuid) is None:
+            continue
+        if any(m.type == "FLUID" and getattr(m, "fluid_type", "") == "FLOW"
+               for m in obj.modifiers):
             return obj
     return None
 
 
-def _drops_modifier(emitter):
+def _drops_modifier(emitter, assembly_uuid):
     if emitter is None:
         return None
     for m in emitter.modifiers:
-        if m.type == "NODES" and m.node_group \
-                and m.node_group.name.startswith("AQS_GN_RainDrops"):
+        if m.type == "NODES" and _is_drop_tree(m.node_group, assembly_uuid):
             return m
     return None
 
@@ -220,7 +227,7 @@ def apply_rain_params(context, entry):
     them back to the ceiling, so nothing ever stamps liquid underwater.
     """
     emitter = find_emitter(entry)
-    mod = _drops_modifier(emitter)
+    mod = _drops_modifier(emitter, entry.uuid)
     fs = _flow_settings(emitter)
     if emitter is None or mod is None:
         return
@@ -284,10 +291,10 @@ def fit_domain(context, entry):
     emitter = find_emitter(entry)
     if dom is None or emitter is None:
         return
-    e_loc = emitter.matrix_world.translation
-    half = entry.rain_area * 0.5
-    mins = Vector((e_loc.x - half, e_loc.y - half, e_loc.z))
-    maxs = Vector((e_loc.x + half, e_loc.y + half, e_loc.z))
+    e_loc = _world_matrix(emitter).translation
+    # The emitter's REAL world footprint (respects manual move/scale/rotate),
+    # not "location ± Rain Area / 2".
+    mins, maxs = emitter_footprint(emitter)
 
     floor_z = None
     for p in entry.pool_sources:
@@ -310,8 +317,9 @@ def fit_domain(context, entry):
         maxs[i] = max(maxs[i], maxs[i] + drift[i])
 
     pad = 0.25
+    top = max(maxs.z, e_loc.z)
     mins = Vector((mins.x - pad, mins.y - pad, floor_z - pad))
-    maxs = Vector((maxs.x + pad, maxs.y + pad, e_loc.z + pad))
+    maxs = Vector((maxs.x + pad, maxs.y + pad, top + pad))
     dom.location = (mins + maxs) * 0.5
     dom.scale = (maxs - mins)
     dom.rotation_euler = (0.0, 0.0, 0.0)
@@ -331,17 +339,57 @@ def memory_estimate(dom, effective_res):
     return cells / 1e6, cells * 120e-9
 
 
-def rebuild_streams(entry):
-    """Deprecated. Safe no-op kept for old registry update callbacks."""
-    return
+def _world_matrix(obj):
+    """World matrix from the object's CURRENT loc/rot/scale.
+
+    obj.matrix_world is only refreshed by the next depsgraph update, so
+    right after apply_area() rescales the emitter it still holds the old
+    size; build the matrix from matrix_basis instead (parent-aware)."""
+    mw = obj.matrix_basis.copy()
+    if obj.parent is not None:
+        mw = obj.parent.matrix_world @ obj.matrix_parent_inverse @ mw
+    return mw
+
+
+def emitter_footprint(emitter):
+    """World-space (mins, maxs) of the emitter PLANE itself.
+
+    Reads the base mesh, not bound_box: the evaluated bounds include the
+    GN drop field hanging below the plane."""
+    mw = _world_matrix(emitter)
+    pts = [mw @ v.co for v in emitter.data.vertices]
+    if not pts:
+        loc = mw.translation
+        return loc.copy(), loc.copy()
+    mins = Vector((min(p[i] for p in pts) for i in range(3)))
+    maxs = Vector((max(p[i] for p in pts) for i in range(3)))
+    return mins, maxs
+
+
+def apply_area(entry):
+    """Rain Area -> the emitter plane's size, so the slider changes where
+    rain actually falls (and fit_domain follows the real plane)."""
+    emitter = find_emitter(entry)
+    if emitter is None or not emitter.data.vertices:
+        return
+    xs = [v.co.x for v in emitter.data.vertices]
+    ys = [v.co.y for v in emitter.data.vertices]
+    size_x = max(max(xs) - min(xs), 1e-6)
+    size_y = max(max(ys) - min(ys), 1e-6)
+    emitter.scale.x = entry.rain_area / size_x
+    emitter.scale.y = entry.rain_area / size_y
 
 
 def build_emitter(context, col, uid, area, location, density=6.0):
     """Build the rain emitter: a plane you can move/scale, with a GN
     modifier generating a steady-state field of falling drop spheres
-    (realized mesh), and a Fluid FLOW (MESH source — the SAME proven
-    mechanism as pools and animated obstacles) so the drops physically
-    splash into the domain.  Returns (emitter, gn_modifier).
+    (realized mesh), and a Fluid FLOW (MESH source — the SAME mechanism
+    as pools and animated obstacles) so the drops physically splash into
+    the domain.  Returns (emitter, gn_modifier).
+
+    Flow behaviour is INFLOW: GEOMETRY only fills liquid once, at the
+    first simulated frame (that is what Still Water relies on), so the
+    rain would stop after frame 1.
     """
     emitter = rain_mod.make_plane("AQS_SimRain_Emitter", area,
                                   C.MODE_SIMRAIN, uid, col)
@@ -357,7 +405,7 @@ def build_emitter(context, col, uid, area, location, density=6.0):
     flow.fluid_type = "FLOW"
     fs = flow.flow_settings
     fs.flow_type = "LIQUID"
-    fs.flow_behavior = "GEOMETRY"        # mesh-source: proven on this build
+    fs.flow_behavior = "INFLOW"          # emit every frame (see docstring)
     _safe(fs, "use_initial_velocity", True)
     return emitter, mod
 
@@ -395,6 +443,7 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=320)
 
+    @delete.guarded_create
     def execute(self, context):
         try:
             return self._build(context)
@@ -541,7 +590,7 @@ class AQS_OT_rain_sim_rebuild_emitter(bpy.types.Operator):
     bl_idname = "aquasuite.rain_sim_rebuild_emitter"
     bl_label = "Rebuild Rain Emitter"
     bl_description = ("Delete this assembly's rain emitter (if any) and "
-                      "rebuild it with the current nozzle-array design — "
+                      "rebuild it with the current drop-field design — "
                       "use this to repair a Rain Sim made with an older "
                       "version, no need to recreate the whole assembly")
     bl_options = {"REGISTER", "UNDO"}
@@ -554,17 +603,15 @@ class AQS_OT_rain_sim_rebuild_emitter(bpy.types.Operator):
             return {"CANCELLED"}
         col = entry.root_collection
         dom = sw.find_domain_object(entry)
-        old = find_emitter(entry)
         pools = {rec.obj for rec in entry.pool_sources}
-        # Remove any previous emitter rig + orphaned seed emitters.
-        # Only AQS-owned objects; never the domain, never pool sources.
+        # Remove the previous emitter rig (and any legacy seed emitters /
+        # droplets).  Apart from the domain, everything this assembly owns
+        # is emitter rig, so select by ownership — never by object name.
+        # Pool sources are user objects (no owner tag) and are skipped too.
         doomed = set()
         for obj in list(col.all_objects):
-            if C.OWNER_PROP not in obj.keys() or obj is dom or obj in pools:
-                continue
-            if obj is old or (old is not None and obj is old.parent) \
-                    or obj.particle_systems or "Emitter" in obj.name \
-                    or "Droplet" in obj.name:
+            if naming.owned_by(obj, entry.uuid) and obj is not dom \
+                    and obj not in pools:
                 doomed.add(obj)
         for obj in doomed:
             bpy.data.objects.remove(obj, do_unlink=True)
@@ -614,7 +661,7 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
         lines, problems = [], []
 
         emitter = find_emitter(entry)
-        mod = _drops_modifier(emitter)
+        mod = _drops_modifier(emitter, entry.uuid)
         fs = _flow_settings(emitter)
         dom = sw.find_domain_object(entry)
         dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
@@ -630,8 +677,10 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
             lines.append(f"behavior: {getattr(fs, 'flow_behavior', '?')} | "
                          f"type: {getattr(fs, 'flow_type', '?')} | "
                          f"source: mesh (evaluated GN geometry)")
-            if getattr(fs, 'flow_behavior', '') != 'GEOMETRY':
-                problems.append("flow behavior is not GEOMETRY")
+            if getattr(fs, 'flow_behavior', '') != 'INFLOW':
+                problems.append("flow behavior is not INFLOW (rain would "
+                                "stop after the first frame) — click "
+                                "Rebuild Emitter")
         else:
             problems.append("no Fluid Flow on the emitter")
         if ds is None:
@@ -667,8 +716,8 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
         else:
             self.report({"INFO"},
                         "Coupling chain OK — drops are real mesh geometry "
-                        "(same mechanism as your working cube). Free + "
-                        "re-bake if you changed anything")
+                        "emitting liquid every frame. Free + re-bake if "
+                        "you changed anything")
         return {"FINISHED"}
 
 

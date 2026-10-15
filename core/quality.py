@@ -40,7 +40,7 @@ def apply_tier(scene):
         if entry.mode != C.MODE_OCEAN or entry.primary is None:
             continue
         obj = entry.primary
-        mod = ocean_mod.find_ocean_modifier(obj)
+        mod = ocean_mod.find_ocean_modifier(obj, entry.uuid)
         if mod is None:
             continue
         res = ocean_mod.get_input(mod, "Resolution")

@@ -77,9 +77,9 @@ MSG = {
     "W009": "Scene FPS below 12 — ripple simulation can become unstable at this timebase.",
     "W012": "Source mesh has open edges; the liquid volume may leak. Consider closing it.",
     "W015": "Secondary particles (foam/spray/bubbles) can multiply bake time several times.",
-    "W018": ("Blast velocity was reduced to {v:.1f} m/s to stay stable at this resolution — "
-             "raise Max Timesteps to about {ts} to reach the requested speed. "
-             "(Raising Resolution tightens this limit.)"),
+    "W018": ("Jet velocity was reduced to {v:.1f} m/s to stay stable at this resolution "
+             "(full speed needs about {ts} solver substeps per frame). Lower Pressure, "
+             "or lower Resolution / use Draft to raise the limit."),
     "W021": ("These objects were kept out of the liquid simulation because they already "
              "have a Fluid setup: {names}."),
     "W022": ("Estimated grid is {gb:.1f} GB — Blender can run out of memory. "

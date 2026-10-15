@@ -79,7 +79,10 @@ degradation* below).
   working. Ownership is tracked by internal IDs, never names.
 - **Delete is a real undo.** *Delete Assembly* removes exactly what
   AquaSuite created and restores anything it changed on your objects
-  (visibility, constraints).
+  (visibility, constraints, Fluid modifiers — found by type, so renaming
+  them doesn't strand them). If the assembly has bake files on disk,
+  Delete asks whether to remove those too (off by default — undo can't
+  bring files back).
 - **Your data is never converted.** *Still Water* hides your source
   mesh and renders liquid in its place; delete the assembly and your
   object comes back untouched.
@@ -93,8 +96,9 @@ degradation* below).
   reduces particle display and ocean resolution non-destructively;
   your authored values come back exactly when you return to Final.
 - **Stability clamps are the law.** Where a setting could exceed the
-  solver's stable range (Gerstner choppiness, Blast velocity), AquaSuite
-  clamps it and tells you what to change to go further.
+  solver's stable range (Gerstner choppiness, hose jet velocity),
+  AquaSuite clamps it and tells you what to change to go further — the
+  hose panel shows a red notice for as long as the jet is being slowed.
 
 ## Baking
 
@@ -122,7 +126,7 @@ What actually costs time, in order:
    generic box).
 3. **Frame range** — cost is linear in frames. New assemblies default
    to a 60-frame cache; extend *Bake Start/End* only when you need to.
-4. **Draft quality** (hose) — on by default: half resolution, 1× mesh,
+4. **Draft quality** (hose, Rain Sim) — on by default: half resolution, 1× mesh,
    no secondary particles. Roughly 8–15× faster. Turn it off only for
    the final bake.
 5. **Secondaries** (Spray regime) — foam/spray/bubbles are a second
@@ -132,15 +136,16 @@ What actually costs time, in order:
    if a draft blast is still too slow.
 
 Crash avoidance: the addon clamps velocities to the solver's stable
-range, warns before RAM-heavy resolutions (≥160), and never blocks the
-UI during a bake. If Blender's memory climbs into swap during a big
+range, shows a live RAM estimate in the panel, **asks for confirmation**
+before baking anything estimated above 2 GB, and never blocks the UI
+during a bake. If Blender's memory climbs into swap during a big
 final bake, cancel (Esc), lower Resolution one notch, and re-bake —
 liquid at 200+ resolution can genuinely need many GB of RAM.
 
 ## Build status — read this once
 
-This is the **v0.9 implementation preview** of the AquaSuite v1.0 technical
-design (TDD + Revision R1). Implemented and functional:
+This is **v0.13.3**, an implementation preview of the AquaSuite v1.0
+technical design (TDD + Revision R1). Implemented and functional:
 
 - All seven modes create, play, and delete cleanly
 - UUID ownership, reversible deletion with restore records
@@ -150,8 +155,12 @@ design (TDD + Revision R1). Implemented and functional:
 - Procedural 7-shape snow collection (ball + 6 dendrite flake types)
 - Reactive Rain with anti-tunneling canvas substeps
 - Refcounted, conflict-safe Mantaflow effectors
-- R1-corrected Water Blast velocity clamp (with the fix suggestion in
-  the warning)
+- R1-corrected hose velocity clamp (with the fix suggestion in the
+  warning and a persistent panel notice)
+- Hose **Fit Domain**: the domain shrink-wraps the jet's path; it refits
+  automatically when Range or Spread changes (re-click after re-aiming)
+- Rain Sim with a Geometry Nodes drop field that emits liquid every
+  frame; Rain Area resizes the emitter and the fitted domain together
 - Preview/Final tier for particles + ocean resolution
 
 Not yet in this build (tracked for 1.0 final):
@@ -160,8 +169,8 @@ Not yet in this build (tracked for 1.0 final):
   swell) and buoy *Wake Reaction* — buoys currently ride the swell only
 - GN sim-zone / ocean bake operator (unneeded until the wake ships —
   default buoys are already farm-safe without a bake)
-- Hose domain auto-rebuild on Range/aim change (the domain is a
-  generously sized static box; scale it manually for long throws)
+- Hose domain refit on *aim* change (keyframed nozzles: click Fit
+  Domain at the widest aim, or scale the domain manually)
 - Wetness darkening map on the Reactive Rain floor
 - Preset engine, addon preferences, headless pytest harness
 

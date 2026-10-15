@@ -9,7 +9,7 @@ import bpy
 import bmesh
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 from . import rain as rain_mod
 
@@ -23,7 +23,13 @@ def _safe(o, attr, value):
 
 
 def _dpaint_toggle(context, obj, dp_type):
-    """Create canvas/brush settings via the operator (required by the API)."""
+    """Create canvas/brush settings via the operator (required by the API).
+
+    type_toggle only acts on an EXISTING Dynamic Paint modifier — without
+    one it silently returns CANCELLED — so make sure the modifier is there.
+    """
+    if not any(m.type == "DYNAMIC_PAINT" for m in obj.modifiers):
+        obj.modifiers.new("AQS Dynamic Paint", "DYNAMIC_PAINT")
     with context.temp_override(active_object=obj, object=obj,
                                selected_objects=[obj]):
         bpy.ops.dpaint.type_toggle(type=dp_type)
@@ -92,6 +98,7 @@ class AQS_OT_rain_reactive_create(bpy.types.Operator):
                       "ripple (Dynamic Paint waves)")
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()

@@ -37,9 +37,10 @@ def _subframe_time(scene):
 
 def _tick_assembly(entry, t):
     surf = entry.primary
-    mod = ocean_mod.find_ocean_modifier(surf) if surf else None
-    if mod is None:
-        # Self-heal: surface gone -> detach orphan buoys (AQS-W007).
+    if surf is None or not surf.users_scene:
+        # Self-heal: the surface OBJECT is really gone -> detach orphan
+        # buoys (AQS-W007).  Only then: a missing/replaced modifier is not
+        # proof the ocean is gone, and detaching is destructive.
         for b in list(entry.buoys):
             if b.obj is not None:
                 names = [n for n in (b.added_constraints or "").split(";") if n]
@@ -50,6 +51,18 @@ def _tick_assembly(entry, t):
         entry.buoys.clear()
         print("[AquaSuite] W007:", C.MSG["W007"])
         return
+
+    mod = ocean_mod.find_ocean_modifier(surf, entry.uuid)
+    if mod is None:
+        # Ocean modifier removed or disabled by the user: hold the buoys
+        # where they are instead of tearing them off the floaters.
+        key = ("nomod", entry.uuid)
+        if key not in _error_logged:
+            _error_logged.add(key)
+            print(f"[AquaSuite] ocean {entry.uuid[:8]}: surface modifier "
+                  "not found — buoys paused")
+        return
+    _error_logged.discard(("nomod", entry.uuid))
 
     params = ocean_mod.read_wave_params(mod)
     layers = gerstner.layer_params(**params)

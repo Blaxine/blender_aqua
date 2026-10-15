@@ -16,16 +16,43 @@ class AQS_OT_assembly_delete(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     uuid: bpy.props.StringProperty()
+    delete_cache: bpy.props.BoolProperty(
+        name="Also delete bake files",
+        default=False,
+        description="Remove this assembly's bake cache folder "
+                    "(//aquasuite_cache/<id>) from disk. Undo can't bring "
+                    "these files back")
+
+    def invoke(self, context, event):
+        # Only ask when there is actually a cache on disk to decide about.
+        if delete.cache_size_mb(self.uuid) <= 0.0:
+            return self.execute(context)
+        return context.window_manager.invoke_props_dialog(self, width=380)
+
+    def draw(self, context):
+        col = self.layout.column()
+        col.label(text=f"Bake files next to the .blend: "
+                       f"{_fmt_size(delete.cache_size_mb(self.uuid))}",
+                  icon="DISK_DRIVE")
+        col.prop(self, "delete_cache", text="Also delete them (can't be undone)")
 
     def execute(self, context):
-        delete.delete_assembly(context.scene, self.uuid)
-        self.report({"INFO"}, "AquaSuite assembly deleted; scene restored")
+        delete.delete_assembly(context.scene, self.uuid,
+                               delete_cache=self.delete_cache)
+        msg = "AquaSuite assembly deleted; scene restored"
+        if self.delete_cache:
+            msg += "; bake files removed"
+        self.report({"INFO"}, msg)
         return {"FINISHED"}
+
+
+def _fmt_size(mb):
+    return f"{mb / 1024.0:.1f} GB" if mb >= 1024.0 else f"{mb:.0f} MB"
 
 
 def _draw_ocean(box, context, entry):
     surf = entry.primary
-    mod = ocean_mod.find_ocean_modifier(surf)
+    mod = ocean_mod.find_ocean_modifier(surf, entry.uuid)
     if mod is None:
         box.label(text="Surface missing", icon="ERROR")
         return
@@ -196,7 +223,7 @@ def _draw_rain_sim(box, entry):
 
     from ..level2.rain_sim import (find_emitter, _drops_modifier)
     from ..level1.ocean import _socket_identifier
-    gnmod = _drops_modifier(find_emitter(entry))
+    gnmod = _drops_modifier(find_emitter(entry), entry.uuid)
     if gnmod is not None:
         drops = box.column(align=True)
         drops.label(text="Drops", icon="MOD_FLUIDSIM")
@@ -256,6 +283,15 @@ def _draw_hose(box, entry):
         op.uuid = entry.uuid
         op.regime = rid
     if entry.regime != C.REGIME_MIST:
+        from ..level3.hose import clamp_state
+        clamp = clamp_state(entry)
+        if clamp is not None:
+            warn = box.column(align=True)
+            warn.alert = True
+            warn.label(text=f"Jet slowed to {clamp[0]:.1f} m/s for stability",
+                       icon="ERROR")
+            warn.label(text="Lower Pressure or Resolution (or use Draft) "
+                            "for full speed")
         row = box.row(align=True)
         row.prop(entry, "draft", toggle=True,
                  icon="CHECKBOX_HLT" if entry.draft else "CHECKBOX_DEHLT")

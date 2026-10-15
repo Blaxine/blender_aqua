@@ -13,7 +13,7 @@ import bpy
 import bmesh
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 from ..level2 import still_water as sw
 
@@ -58,6 +58,23 @@ def blast_clamp(requested, dom, resolution, fps, ts_max, cfl, safety=0.8):
         return requested, None
     ts_needed = math.ceil(requested / (safety * cfl * dx * fps))
     return v_max, ts_needed
+
+
+CLAMP_PROP = "aqs_clamp"   # (velocity, timesteps_needed) while clamped
+
+
+def _set_clamp(entry, value):
+    if value is None:
+        if CLAMP_PROP in entry.keys():
+            del entry[CLAMP_PROP]
+    else:
+        entry[CLAMP_PROP] = [float(value[0]), int(value[1])]
+
+
+def clamp_state(entry):
+    """(velocity, timesteps_needed) when the jet is being slowed, else None."""
+    v = entry.get(CLAMP_PROP)
+    return (float(v[0]), int(v[1])) if v else None
 
 
 def _aim_direction(nozzle):
@@ -127,6 +144,7 @@ def apply_regime(context, entry, report=None):
         dom.hide_render = is_mist
 
     if is_mist or flow_mod is None or dom_mod is None:
+        _set_clamp(entry, None)
         return
 
     p = C.REGIME_PARAMS[regime]
@@ -143,6 +161,9 @@ def apply_regime(context, entry, report=None):
     requested = p["velocity"] * entry.pressure
     velocity, ts_needed = blast_clamp(requested, dom, resolution, fps,
                                       p["ts_max"], p["cfl"])
+    # Slider update callbacks have no report(), so the clamp is also stored
+    # on the entry and drawn by the panel — it can never apply silently.
+    _set_clamp(entry, (velocity, ts_needed) if ts_needed else None)
     if ts_needed and report:
         report({"WARNING"}, "AQS-W018: " + C.MSG["W018"].format(
             v=velocity, ts=ts_needed))
@@ -161,8 +182,8 @@ def apply_regime(context, entry, report=None):
     _safe(ds, "cfl_condition", p["cfl"])
     _safe(ds, "timesteps_min", p["ts_min"])
     _safe(ds, "timesteps_max", p["ts_max"])
-    _safe(ds, "use_spray_particles", secondaries)
-    _safe(ds, "use_foam_particles", secondaries)
+    for flag in sw.SECONDARY_FLAGS:          # toggle-on-write: see set_flag
+        sw.set_flag(ds, flag, secondaries)
     _safe(ds, "mesh_scale", 1 if entry.draft else 2)  # mesh upres cost
     if secondaries and report:
         report({"WARNING"}, "AQS-W015: " + C.MSG["W015"])
@@ -196,6 +217,7 @@ class AQS_OT_hose_create(bpy.types.Operator):
                       "regimes: Normal, Mist, Spray, Water Blast")
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()
@@ -226,8 +248,8 @@ class AQS_OT_hose_create(bpy.types.Operator):
         emitter.hide_render = True
         emitter.display_type = "WIRE"
 
-        # Domain: generous box under the nozzle covering Range (simplified
-        # static sizing in this build; TDD's capsule-sweep rebuild is roadmap).
+        # Domain: a unit cube placed and sized by fit_domain() to the jet's
+        # capsule sweep (refits on Range/Spread; Fit Domain after re-aiming).
         dmesh = bpy.data.meshes.new("AQS_Hose_Domain")
         bm = bmesh.new()
         bmesh.ops.create_cube(bm, size=1.0)
