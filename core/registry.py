@@ -1,0 +1,211 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Scene-level assembly registry (TDD §4.3, pointer-based per R1.1)."""
+
+import bpy
+from bpy.props import (
+    CollectionProperty,
+    EnumProperty,
+    FloatProperty,
+    IntProperty,
+    PointerProperty,
+    StringProperty,
+    BoolProperty,
+)
+
+from .. import constants as C
+
+
+class AQS_PoolSourceEntry(bpy.types.PropertyGroup):
+    """Restore record for a user mesh serving as Rain-Sim pool water."""
+    obj: PointerProperty(type=bpy.types.Object)
+    hide_render: BoolProperty(default=False)
+    display_type: StringProperty(default="TEXTURED")
+
+
+class AQS_BuoyEntry(bpy.types.PropertyGroup):
+    obj: PointerProperty(type=bpy.types.Object, name="Floater")
+    empty: PointerProperty(type=bpy.types.Object, name="Driver Empty")
+    radius: FloatProperty(name="Sample Radius", default=0.5, min=0.01)
+    offset: FloatProperty(
+        name="Buoyancy Offset", default=0.0, soft_min=-2.0, soft_max=2.0,
+        description="Vertical offset of the waterline on the floater")
+    smoothing: FloatProperty(
+        name="Bob Smoothing", default=0.35, min=0.0, soft_max=2.0,
+        description="Seconds of stateless FIR smoothing (deterministic)")
+    tilt: FloatProperty(
+        name="Tilt Amount", default=1.0, min=0.0, soft_max=3.0,
+        description="Pitch/roll response to the local wave gradient")
+    added_constraints: StringProperty(default="")  # ';'-joined names, restore record
+
+
+def _resolution_update(self, context):
+    """Single authoritative resolution per liquid assembly.
+
+    HOSE: re-derive the full parameter package (draft halving, velocity
+    clamp) so nothing clobbers the user's choice.  STILL: write straight
+    to the domain settings.
+    """
+    if self.mode == "HOSE":
+        from ..level3 import hose
+        hose.apply_regime(context, self)
+    elif self.mode == "SIMRAIN":
+        from ..level2 import rain_sim
+        rain_sim.apply_quality(context, self)
+    elif self.mode == "STILL":
+        from ..level2 import still_water as sw
+        dom = sw.find_domain_object(self)
+        dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
+            if dom else None
+        ds = getattr(dmod, "domain_settings", None)
+        if ds is not None:
+            ds.resolution_max = int(self.base_resolution)
+
+
+def _rain_streams_update(self, context):
+    if self.mode != "SIMRAIN":
+        return
+    from ..level2 import rain_sim
+    rain_sim.rebuild_streams(self)
+    rain_sim.apply_rain_params(context, self)
+
+
+def _rain_params_update(self, context):
+    if self.mode != "SIMRAIN":
+        return
+    from ..level2 import rain_sim
+    rain_sim.apply_rain_params(context, self)
+
+
+def _rain_domain_update(self, context):
+    if self.mode != "SIMRAIN":
+        return
+    from ..level2 import rain_sim
+    rain_sim.fit_domain(context, self)
+    rain_sim.apply_rain_params(context, self)
+    rain_sim.apply_quality(context, self)
+
+
+def _hose_params_update(self, context):
+    if self.mode != "HOSE":
+        return
+    from ..level3 import hose
+    hose.apply_regime(context, self)
+
+
+def _hose_domain_update(self, context):
+    if self.mode != "HOSE":
+        return
+    from ..level3 import hose
+    hose.fit_domain(context, self)
+    hose.apply_regime(context, self)
+
+
+class AQS_AssemblyEntry(bpy.types.PropertyGroup):
+    uuid: StringProperty()
+    mode: StringProperty()
+    created: StringProperty()
+    version: StringProperty(default=C.BUILD_TAG)
+    primary: PointerProperty(type=bpy.types.Object)
+    root_collection: PointerProperty(type=bpy.types.Collection)
+    # Still Water restore records (source visibility policy §7.1.2/7.1.3)
+    source: PointerProperty(type=bpy.types.Object)
+    src_hide_render: BoolProperty(default=False)
+    src_display_type: StringProperty(default="TEXTURED")
+    # Hose
+    regime: EnumProperty(items=C.REGIME_ITEMS, default=C.REGIME_NORMAL)
+    pressure: FloatProperty(
+        name="Pressure", default=1.0, min=0.05, max=1.5, subtype="FACTOR",
+        update=_hose_params_update,
+        description="Scales jet velocity. Automatically clamped to what the "
+                    "solver can integrate stably at the current resolution")
+    hose_range: FloatProperty(
+        name="Range", default=6.0, min=0.5, max=50.0, subtype="DISTANCE",
+        update=_hose_domain_update,
+        description="How far the jet must reach; drives the fitted domain size")
+    spread: FloatProperty(
+        name="Spread Angle", default=6.0, min=0.0, max=45.0,
+        update=_hose_domain_update,
+        description="Cone half-angle in degrees (widens mist and breaks up "
+                    "liquid regimes)")
+    nozzle_radius: FloatProperty(
+        name="Nozzle Radius", default=0.03, min=0.005, max=0.2,
+        subtype="DISTANCE", update=_hose_params_update,
+        description="Physical emitter radius")
+    draft: BoolProperty(
+        name="Draft Quality", default=True,
+        update=_resolution_update,
+        description="Half resolution, 1x mesh, no secondary particles — "
+                    "roughly 8-15x faster bakes for iteration. Turn off "
+                    "for the final bake")
+    # Rain Simulation
+    pool_collection: PointerProperty(type=bpy.types.Collection)
+    pool_sources: CollectionProperty(type=AQS_PoolSourceEntry)
+    rain_area: FloatProperty(
+        name="Rain Area", default=4.0, min=1.0, max=30.0, subtype="DISTANCE",
+        update=_rain_domain_update,
+        description="Edge of the rained-on square (memory scales with area)")
+    rain_speed: FloatProperty(
+        name="Speed", default=9.0, min=1.0, max=20.0,
+        update=_rain_params_update, description="Drop speed in m/s")
+    rain_angle: FloatProperty(
+        name="Angle", default=0.0, min=0.0, max=60.0,
+        update=_rain_domain_update,
+        description="Tilt from vertical (degrees) — wind-blown rain. Also "
+                    "widens the fitted domain to cover the drift")
+    rain_direction: FloatProperty(
+        name="Direction", default=0.0, min=0.0, max=360.0,
+        update=_rain_domain_update,
+        description="Compass heading of the tilt (degrees)")
+    rain_auto_lifetime: BoolProperty(
+        name="Auto Life", default=True, update=_rain_params_update,
+        description="Derive drop lifetime from fall height and speed so "
+                    "drops die just past pool level. Turn off to set "
+                    "Lifetime manually")
+    rain_streams: IntProperty(
+        name="Rain Streams", default=14, min=1, max=100,
+        update=_rain_streams_update,
+        description="Number of falling streams (each breaks into drops). "
+                    "Changing this regenerates the nozzle layout")
+    base_resolution: IntProperty(
+        name="Resolution", default=96, min=16, max=512,
+        update=_resolution_update,
+        description="Voxel grid divisions on the domain's longest side (16 = chunky but instant viewport). "
+                    "Bake time and RAM scale roughly with the CUBE of this "
+                    "value: 96→160 is ~5x slower, 160→256 another ~4x")
+    buoys: CollectionProperty(type=AQS_BuoyEntry)
+
+
+def entries(scene):
+    return scene.aqs_assemblies
+
+
+def get(scene, assembly_uuid):
+    for e in scene.aqs_assemblies:
+        if e.uuid == assembly_uuid:
+            return e
+    return None
+
+
+def add(scene, mode, assembly_uuid, primary=None, root_collection=None):
+    import datetime
+    e = scene.aqs_assemblies.add()
+    e.uuid = assembly_uuid
+    e.mode = mode
+    e.created = datetime.date.today().isoformat()
+    e.version = C.BUILD_TAG
+    if primary is not None:
+        e.primary = primary
+    if root_collection is not None:
+        e.root_collection = root_collection
+    return e
+
+
+def remove(scene, assembly_uuid):
+    for i, e in enumerate(scene.aqs_assemblies):
+        if e.uuid == assembly_uuid:
+            scene.aqs_assemblies.remove(i)
+            return True
+    return False
+
+
+CLASSES = (AQS_PoolSourceEntry, AQS_BuoyEntry, AQS_AssemblyEntry)

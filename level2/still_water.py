@@ -1,0 +1,412 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Still Water — Object-to-Water (TDD §7.1).
+
+The user's mesh becomes the initial liquid volume of a Mantaflow FLIP
+sim.  The source is hidden (never converted, §7.1.3) and its prior state
+recorded for restore.  Effectors follow the R1.4 refcount + conflict
+policy.
+"""
+
+import json
+
+import bpy
+import bmesh
+from mathutils import Vector
+
+from .. import constants as C
+from ..core import naming, registry
+from ..materials import mats
+
+RES_PRESETS = {"PREVIEW": 48, "MEDIUM": 96, "HIGH": 160, "ULTRA": 256}
+
+
+def _safe(o, attr, value):
+    if hasattr(o, attr):
+        try:
+            setattr(o, attr, value)
+        except Exception as exc:
+            print(f"[AquaSuite] could not set {attr}: {exc}")
+
+
+def world_bbox(obj):
+    corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    mins = Vector((min(c[i] for c in corners) for i in range(3)))
+    maxs = Vector((max(c[i] for c in corners) for i in range(3)))
+    return mins, maxs
+
+
+def _bbox_intersect(a_min, a_max, b_min, b_max):
+    return all(a_min[i] <= b_max[i] and b_min[i] <= a_max[i] for i in range(3))
+
+
+def make_domain(name, mode, uid, col, mins, maxs,
+                pad_xy=1.5, pad_up=1.2, pad_dn=2.5):
+    size = maxs - mins
+    center = (maxs + mins) * 0.5
+    half = Vector((max(size.x, 0.1) * 0.5 * pad_xy,
+                   max(size.y, 0.1) * 0.5 * pad_xy, 0.0))
+    top = maxs.z + max(size.z, 0.1) * (pad_up - 1.0)
+    bottom = mins.z - max(size.z, 0.1) * (pad_dn - 1.0)
+
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bm.to_mesh(mesh)
+    bm.free()
+    dom = naming.new_mesh_object(col, name, mesh, mode, uid)
+    dom.location = (center.x, center.y, (top + bottom) * 0.5)
+    dom.scale = (half.x * 2.0, half.y * 2.0, (top - bottom))
+    return dom
+
+
+def setup_domain_settings(dom_mod, uid, resolution, cfl=4.0,
+                          ts_min=1, ts_max=4, secondaries=False):
+    ds = dom_mod.domain_settings
+    ds.domain_type = "LIQUID"
+    ds.resolution_max = resolution
+    _safe(ds, "use_mesh", True)
+    _safe(ds, "cfl_condition", cfl)
+    _safe(ds, "timesteps_min", ts_min)
+    _safe(ds, "timesteps_max", ts_max)
+    _safe(ds, "use_spray_particles", secondaries)
+    _safe(ds, "use_foam_particles", secondaries)
+    _safe(ds, "use_bubble_particles", secondaries)
+    _safe(ds, "cache_type", "MODULAR")
+    _safe(ds, "cache_data_format", "OPENVDB")
+    ds.cache_directory = f"//aquasuite_cache/{uid}"
+    return ds
+
+
+def add_effectors(scene, domain, uid, report=None):
+    """R1.4/§5.3a-b: eligibility + conflict policy + refcounting.
+
+    NOTE: no bounding-box gate — an ANIMATED object can start outside
+    the domain and enter later, so testing intersection at the current
+    frame silently drops real obstacles (the 'only one of my two cubes
+    works' bug). Mantaflow ignores effectors that never enter the
+    domain, so registering every Collision-enabled mesh is free.
+    """
+    skipped = []
+    for obj in scene.objects:
+        if obj.type != "MESH" or obj == domain:
+            continue
+        has_collision = any(m.type == "COLLISION" for m in obj.modifiers)
+        if not has_collision:
+            continue
+        fluid = next((m for m in obj.modifiers if m.type == "FLUID"), None)
+        if fluid is not None:
+            if fluid.fluid_type != "EFFECTOR":
+                skipped.append(obj.name)      # Flow/Domain conflict -> skip
+                continue
+            if not fluid.name.startswith("AQS"):
+                # A USER-made effector: it already works as an obstacle.
+                # Do not refcount, never touch, never remove.
+                continue
+        if fluid is None:
+            fluid = obj.modifiers.new("AQS Effector", "FLUID")
+            fluid.fluid_type = "EFFECTOR"
+            es = fluid.effector_settings
+            _safe(es, "effector_type", "COLLISION")
+        owners = []
+        raw = obj.get(C.EFFECTOR_OWNERS_PROP)
+        if raw:
+            try:
+                owners = json.loads(raw)
+            except Exception:
+                owners = []
+        if uid not in owners:
+            owners.append(uid)
+        obj[C.EFFECTOR_OWNERS_PROP] = json.dumps(owners)
+    if skipped and report:
+        report({"WARNING"},
+               "AQS-W021: " + C.MSG["W021"].format(names=", ".join(skipped)))
+
+
+def refresh_obstacles(scene, entry, report=None):
+    """Re-scan the scene for Collision-enabled meshes and (re)register
+    them as Mantaflow effectors for this assembly's domain.
+
+    Runs automatically before every bake: obstacles added AFTER the
+    assembly was created become real obstacles, matching the universal
+    'Collision = obstacle' rule instead of a create-time snapshot.
+
+    Also sets each AQS effector's surface_distance to ~1 voxel of this
+    domain, so thin walls (thinner than a voxel) stop leaking.
+    Returns the number of live effectors intersecting the domain.
+    """
+    dom = find_domain_object(entry)
+    if dom is None:
+        return 0
+    add_effectors(scene, dom, entry.uuid, report=report)
+
+    dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None)
+    ds = getattr(dmod, "domain_settings", None)
+    dx = (max(dom.dimensions) / ds.resolution_max) \
+        if ds and ds.resolution_max > 0 else 0.05
+    thickness = min(max(dx, 0.02), 0.3)
+
+    count = 0
+    for obj in scene.objects:
+        raw = obj.get(C.EFFECTOR_OWNERS_PROP)
+        if not raw:
+            continue
+        for mod in obj.modifiers:
+            if mod.type == "FLUID" \
+                    and getattr(mod, "fluid_type", "") == "EFFECTOR" \
+                    and mod.name.startswith("AQS"):
+                es = mod.effector_settings
+                _safe(es, "use_effector", True)
+                _safe(es, "surface_distance", thickness)
+                count += 1
+    return count
+
+
+def mesh_has_open_edges(obj):
+    me = obj.data
+    edge_users = {}
+    for poly in me.polygons:
+        for ek in poly.edge_keys:
+            edge_users[ek] = edge_users.get(ek, 0) + 1
+    return any(n < 2 for n in edge_users.values())
+
+
+class AQS_OT_still_water_create(bpy.types.Operator):
+    bl_idname = "aquasuite.still_water_create"
+    bl_label = "Turn Into Water"
+    bl_description = ("The active mesh's volume becomes actual liquid "
+                      "(Mantaflow FLIP — baking is mandatory)")
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and obj.type == "MESH" \
+            and C.OWNER_PROP not in obj.keys() \
+            and C.SRC_PROP not in obj.keys()
+
+    def execute(self, context):
+        scene = context.scene
+        src = context.active_object
+        # R1.4 conflict policy: one Fluid modifier per object; never touch
+        # a user-owned Fluid setup.
+        if any(m.type == "FLUID" for m in src.modifiers):
+            self.report({"ERROR"},
+                        "This object already has a Fluid modifier — AquaSuite "
+                        "won't modify existing Fluid setups (AQS-W021).")
+            return {"CANCELLED"}
+        uid = naming.new_uuid()
+        col = naming.new_assembly_collection(scene, C.MODE_STILL, uid)
+
+        if mesh_has_open_edges(src):
+            self.report({"WARNING"}, "AQS-W012: " + C.MSG["W012"])
+
+        mins, maxs = world_bbox(src)
+        dom = make_domain("AQS_Still_Domain", C.MODE_STILL, uid, col,
+                          mins, maxs)
+        dom_mod = dom.modifiers.new("AQS Fluid", "FLUID")
+        dom_mod.fluid_type = "DOMAIN"
+        setup_domain_settings(dom_mod, uid, RES_PRESETS["MEDIUM"])
+        # Short default cache range: bake cost is linear in frames.
+        _safe(dom_mod.domain_settings, "cache_frame_start", scene.frame_start)
+        _safe(dom_mod.domain_settings, "cache_frame_end",
+              min(scene.frame_start + 59, scene.frame_end))
+        mats.assign(dom, mats.water_surface(C.MODE_STILL, uid,
+                                            name="AQS_MAT_WaterVolume"))
+
+        # Flow: one-shot GEOMETRY fill (§7.1.2 step 3)
+        flow = src.modifiers.new("AQS Flow", "FLUID")
+        flow.fluid_type = "FLOW"
+        fs = flow.flow_settings
+        fs.flow_type = "LIQUID"
+        fs.flow_behavior = "GEOMETRY"
+        _safe(fs, "use_initial_velocity", False)
+
+        # Source visibility policy + restore records (§7.1.2 step 4)
+        entry = registry.add(scene, C.MODE_STILL, uid, primary=dom,
+                             root_collection=col)
+        entry["base_resolution"] = RES_PRESETS["MEDIUM"]
+        entry.source = src
+        entry.src_hide_render = src.hide_render
+        entry.src_display_type = src.display_type
+        src.hide_render = True
+        src.display_type = "WIRE"
+        # Dedicated source marker — deliberately NOT the owner tag, so the
+        # delete sweep can never remove a user object (even if the registry
+        # entry is lost in an old file).
+        src[C.SRC_PROP] = uid
+
+        add_effectors(scene, dom, uid, report=self.report)
+
+        context.view_layer.objects.active = dom
+        self.report({"INFO"},
+                    "AquaSuite: Still Water created — bake required (amber banner)")
+        return {"FINISHED"}
+
+
+def find_domain_object(entry):
+    """Locate the assembly's Fluid DOMAIN object.
+
+    The primary object is the domain for Still Water but the *nozzle
+    empty* for the Hose — so never assume; scan the assembly collection
+    for the object actually carrying a Fluid modifier of type DOMAIN.
+    """
+    candidates = []
+    if entry is None:
+        return None
+    if entry.primary is not None:
+        candidates.append(entry.primary)
+    if entry.root_collection is not None:
+        candidates.extend(entry.root_collection.all_objects)
+    for obj in candidates:
+        for mod in obj.modifiers:
+            if mod.type == "FLUID" and getattr(mod, "fluid_type", "") == "DOMAIN":
+                return obj
+    return None
+
+
+import contextlib
+
+
+@contextlib.contextmanager
+def _fluid_op_override(context, dom):
+    """Make `dom` the genuinely active+selected object for the duration
+    of a fluid bake/free operator, then restore the user's selection.
+
+    Fluid operators resolve their target from the active object; a
+    temp_override alone is not sufficient on all code paths, so we set
+    the real view-layer state (with restore) *and* provide the override.
+    """
+    vl = context.view_layer
+    prev_active = vl.objects.active
+    prev_sel = [o for o in vl.objects if o.select_get()]
+    for o in prev_sel:
+        o.select_set(False)
+    try:
+        dom.select_set(True)
+    except RuntimeError:
+        pass  # not selectable in this view layer; the override still applies
+    try:
+        vl.objects.active = dom
+    except Exception:
+        pass
+    try:
+        with context.temp_override(active_object=dom, object=dom,
+                                   selected_objects=[dom],
+                                   selected_editable_objects=[dom]):
+            yield
+    finally:
+        try:
+            dom.select_set(False)
+        except RuntimeError:
+            pass
+        for o in prev_sel:
+            try:
+                o.select_set(True)
+            except (RuntimeError, ReferenceError):
+                pass
+        try:
+            vl.objects.active = prev_active
+        except Exception:
+            pass
+
+
+class AQS_OT_bake_fluid(bpy.types.Operator):
+    bl_idname = "aquasuite.bake_fluid"
+    bl_label = "Bake Liquid"
+    bl_description = "Bake the Mantaflow simulation for this assembly"
+
+    uuid: bpy.props.StringProperty()
+
+    def execute(self, context):
+        if not bpy.data.filepath:
+            self.report({"ERROR"}, "AQS-E020: " + C.MSG["E020"])
+            return {"CANCELLED"}
+        entry = registry.get(context.scene, self.uuid)
+        dom = find_domain_object(entry)
+        if dom is None:
+            self.report({"ERROR"},
+                        "No fluid domain found in this assembly — was it "
+                        "modified or partially deleted?")
+            return {"CANCELLED"}
+        # Hose in Mist regime disables the fluid backend; guard it.
+        dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None)
+        if dmod is not None and not dmod.show_viewport:
+            self.report({"ERROR"},
+                        "The liquid backend is disabled in the current "
+                        "regime (Mist is particle-based and needs no bake). "
+                        "Switch to Normal, Spray, or Blast first.")
+            return {"CANCELLED"}
+        # Ensure the domain is selectable/visible for the operator.
+        was_hidden = dom.hide_get() if hasattr(dom, "hide_get") else False
+        if was_hidden:
+            dom.hide_set(False)
+        # Living obstacle rule: (re)register Collision-enabled meshes as
+        # effectors NOW, so objects added after creation block the water.
+        try:
+            n = refresh_obstacles(context.scene, entry, report=self.report)
+            if n:
+                self.report({"INFO"},
+                            f"{n} obstacle(s) registered for this bake")
+        except Exception as exc:
+            print(f"[AquaSuite] obstacle refresh warning: {exc}")
+
+        # RAM guard: estimate the grid from the ACTUAL fitted domain and
+        # resolution — the honest number, not a resolution rule of thumb.
+        try:
+            from .rain_sim import memory_estimate
+            res = dmod.domain_settings.resolution_max if dmod else 0
+            _mcells, gb = memory_estimate(dom, res)
+            if gb > 2.0:
+                self.report({"WARNING"},
+                            "AQS-W022: " + C.MSG["W022"].format(gb=gb))
+        except Exception:
+            pass
+        try:
+            with _fluid_op_override(context, dom):
+                # INVOKE_DEFAULT runs the bake as a background job: the UI
+                # stays responsive, a progress bar appears, and Esc cancels.
+                # (A blocking bake looks exactly like a crash — it isn't,
+                # but an animator shouldn't have to know that.)
+                bpy.ops.fluid.bake_all("INVOKE_DEFAULT")
+        except Exception as exc:
+            self.report({"ERROR"}, f"Bake failed: {exc}")
+            return {"CANCELLED"}
+        finally:
+            if was_hidden:
+                dom.hide_set(True)
+        self.report({"INFO"},
+                    "Baking in the background — progress bar at the bottom, "
+                    "press Esc to cancel")
+        return {"FINISHED"}
+
+
+class AQS_OT_free_fluid(bpy.types.Operator):
+    bl_idname = "aquasuite.free_fluid"
+    bl_label = "Free Bake"
+
+    uuid: bpy.props.StringProperty()
+
+    def execute(self, context):
+        entry = registry.get(context.scene, self.uuid)
+        dom = find_domain_object(entry)
+        if dom is None:
+            self.report({"ERROR"},
+                        "No fluid domain found in this assembly.")
+            return {"CANCELLED"}
+        was_hidden = dom.hide_get() if hasattr(dom, "hide_get") else False
+        if was_hidden:
+            dom.hide_set(False)
+        try:
+            with _fluid_op_override(context, dom):
+                bpy.ops.fluid.free_all()
+        except Exception as exc:
+            self.report({"ERROR"}, f"Free failed: {exc}")
+            return {"CANCELLED"}
+        finally:
+            if was_hidden:
+                dom.hide_set(True)
+        return {"FINISHED"}
+
+
+CLASSES = (AQS_OT_still_water_create, AQS_OT_bake_fluid,
+           AQS_OT_free_fluid)

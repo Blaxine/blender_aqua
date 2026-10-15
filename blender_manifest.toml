@@ -1,0 +1,29 @@
+schema_version = "1.0.0"
+
+# Blender 4.2+ Extension manifest.
+# On Blender 4.1 this file is ignored and the legacy bl_info in
+# __init__.py is used instead — the addon supports both.
+
+id = "aquasuite"
+version = "0.13.2"
+name = "AquaSuite — Water FX"
+tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
+maintainer = "AquaSuite"
+type = "add-on"
+
+website = ""
+
+tags = ["Physics", "Object", "3D View"]
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+# No bundled wheels, no network access: AquaSuite uses only Blender's
+# built-in Python modules (bpy, bmesh, mathutils) and the standard
+# library. Zero external dependencies.
+
+[permissions]
+files = "Write simulation caches to //aquasuite_cache next to the .blend"
