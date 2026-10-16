@@ -5,13 +5,13 @@ schema_version = "1.0.0"
 # __init__.py is used instead — the addon supports both.
 
 id = "aquasuite"
-version = "0.13.3"
+version = "0.14.0"
 name = "AquaSuite — Water FX"
 tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
 maintainer = "AquaSuite"
 type = "add-on"
 
-website = ""
+website = "https://github.com/Blaxine/blender_aqua"
 
 tags = ["Physics", "Object", "3D View"]
 

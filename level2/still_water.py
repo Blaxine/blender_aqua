@@ -44,6 +44,25 @@ SECONDARY_FLAGS = ("use_spray_particles", "use_foam_particles",
                    "use_bubble_particles")
 
 
+def object_dims(obj):
+    """Size of a (domain) object from its CURRENT scale and BASE mesh.
+
+    obj.dimensions comes from the evaluated bounding box: it is stale
+    (often zero) until the next depsgraph update — e.g. right after a
+    domain is created or refitted in the same operator — and once baked
+    it measures the liquid, not the domain.  Domains are unrotated boxes,
+    so scale x mesh extent is exact.
+    """
+    me = getattr(obj, "data", None)
+    verts = getattr(me, "vertices", None)
+    if not verts:
+        return Vector(obj.dimensions)
+    sca = obj.matrix_basis.to_scale()
+    return Vector((abs(sca[i]) * (max(v.co[i] for v in verts)
+                                  - min(v.co[i] for v in verts))
+                   for i in range(3)))
+
+
 def world_bbox(obj):
     corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
     mins = Vector((min(c[i] for c in corners) for i in range(3)))
@@ -162,7 +181,7 @@ def refresh_obstacles(scene, entry, report=None):
 
     dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None)
     ds = getattr(dmod, "domain_settings", None)
-    dx = (max(dom.dimensions) / ds.resolution_max) \
+    dx = (max(object_dims(dom)) / ds.resolution_max) \
         if ds and ds.resolution_max > 0 else 0.05
     thickness = min(max(dx, 0.02), 0.3)
 

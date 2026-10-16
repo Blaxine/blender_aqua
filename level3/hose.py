@@ -51,7 +51,7 @@ def _find_emitter(entry):
 
 
 def blast_clamp(requested, dom, resolution, fps, ts_max, cfl, safety=0.8):
-    longest = max(dom.dimensions) if dom else 8.0
+    longest = max(sw.object_dims(dom)) if dom else 8.0
     dx = longest / max(resolution, 1)
     v_max = safety * cfl * dx * fps * ts_max
     if requested <= v_max:

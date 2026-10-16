@@ -159,6 +159,20 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
         name="Direction", default=0.0, min=0.0, max=360.0,
         update=_rain_domain_update,
         description="Compass heading of the tilt (degrees)")
+    rain_density: FloatProperty(
+        name="Drop Amount", default=6.0, min=0.05, soft_max=100.0,
+        update=_rain_params_update,
+        description="Drops per square metre of the emitter (stays the same "
+                    "when Rain Area changes)")
+    drop_size: FloatProperty(
+        name="Drop Size", default=0.0025, min=0.0005, soft_max=0.05,
+        subtype="DISTANCE", update=_rain_params_update,
+        description="Radius of the rendered raindrops (real rain: 1-3 mm). "
+                    "The splash liquid injected at impact is never smaller "
+                    "than ~1 voxel, or the solver can't see it")
+    rain_seed: IntProperty(
+        name="Seed", default=0, min=0, update=_rain_params_update,
+        description="Random layout of the drops")
     base_resolution: IntProperty(
         name="Resolution", default=96, min=16, max=512,
         update=_resolution_update,

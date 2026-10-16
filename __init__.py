@@ -9,7 +9,7 @@ bundled README.md and docs/TROUBLESHOOTING.md.
 bl_info = {
     "name": "AquaSuite — Water FX",
     "author": "AquaSuite",
-    "version": (0, 13, 3),
+    "version": (0, 14, 0),
     "blender": (4, 1, 0),
     "location": "3D Viewport > N-panel > Water",
     "description": "One-click layered water: ocean, rain, reactive rain, "

@@ -154,7 +154,7 @@ class AQS_OT_set_resolution(bpy.types.Operator):
 
 def _draw_fluid_settings(box, entry):
     """Resolution controllers + live cost readout + bake range."""
-    from ..level2.still_water import find_domain_object
+    from ..level2.still_water import find_domain_object, object_dims
     dom = find_domain_object(entry)
     dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
         if dom else None
@@ -180,7 +180,7 @@ def _draw_fluid_settings(box, entry):
     # Live readout: effective resolution (after Draft halving), voxel
     # size, and rough bake cost relative to Medium(96).
     eff = ds.resolution_max
-    longest = max(dom.dimensions) if dom else 0.0
+    longest = max(object_dims(dom)) if dom else 0.0
     if eff > 0 and longest > 0.0:
         dx_cm = longest / eff * 100.0
         cost = (eff / 96.0) ** 3
@@ -221,24 +221,24 @@ def _draw_rain_sim(box, entry):
     colm.prop(entry, "rain_direction")
     colm.prop(entry, "rain_area")
 
-    from ..level2.rain_sim import (find_emitter, _drops_modifier)
-    from ..level1.ocean import _socket_identifier
+    from ..level2.rain_sim import (find_emitter, _drops_modifier,
+                                   is_legacy_tree)
     gnmod = _drops_modifier(find_emitter(entry), entry.uuid)
+    legacy = gnmod is not None and is_legacy_tree(gnmod)
     if gnmod is not None:
         drops = box.column(align=True)
         drops.label(text="Drops", icon="MOD_FLUIDSIM")
-        for sock_name, label in (("Density", "Drop Amount"),
-                                 ("Drop Size", "Drop Size"),
-                                 ("Seed", "Seed")):
-            ident = _socket_identifier(gnmod, sock_name)
-            if ident:
-                drops.prop(gnmod, f'["{ident}"]', text=label)
+        drops.prop(entry, "rain_density")
+        drops.prop(entry, "drop_size")
+        drops.prop(entry, "rain_seed")
 
-    if gnmod is None:
+    if gnmod is None or legacy:
         sub = box.row()
         sub.alert = True
+        text = "Emitter missing — Rebuild" if gnmod is None \
+            else "Old rain emitter — Rebuild"
         op = sub.operator("aquasuite.rain_sim_rebuild_emitter",
-                          text="Emitter missing — Rebuild", icon="ERROR")
+                          text=text, icon="ERROR")
         op.uuid = entry.uuid
     else:
         sub = box.row(align=True)

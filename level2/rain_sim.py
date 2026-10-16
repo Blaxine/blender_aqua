@@ -6,13 +6,18 @@ raise ripples in pool water because drops and pools are the SAME fluid
 in one FLIP solve — no faked ripple layer.
 
 Architecture:
-  * The emitter is a plane carrying a Geometry Nodes "drop field": points
-    scattered on the plane, each moved along the rain velocity with a
-    per-point random phase that wraps at Fall Distance, instanced as
-    small streak spheres and REALIZED into real mesh.
-  * A Fluid FLOW (mesh source, INFLOW behaviour) on the same plane stamps
-    liquid wherever a drop is, every frame, with the rain velocity as
-    initial velocity → falling droplets that splash.
+  * Real raindrops (1-3 mm) are far smaller than any affordable voxel, so
+    the FALL is thin rendered geometry and only the IMPACT is liquid.
+  * The emitter is a plane with a Geometry Nodes "drop field": points
+    scattered on the plane, each following the ballistic rain path (rain
+    velocity + gravity) with a per-point random phase that wraps exactly
+    when the drop reaches the water.  A child "drops" object renders that
+    field at Drop Size.
+  * The emitter itself runs the same field in Emit Only mode: it keeps
+    only the drops in the frame before impact, at least ~1 voxel big, and
+    a Fluid FLOW (mesh source, INFLOW, impact velocity) injects them —
+    the FLIP solve only ever handles splashes, crowns and ripples, in a
+    domain fitted to the water instead of the whole fall column.
   * Angle / Direction / Speed drive the drop velocity vector; Rain Area
     sizes the emitter plane and the fitted domain together.
   * A per-assembly Pool collection: user meshes added to it become
@@ -21,11 +26,10 @@ Architecture:
   * Resolution presets / draft / bake are the shared liquid controls.
 
 Memory pitfalls engineered around (the ones that take Blender down):
-  1. Domain volume — fitted to the pools + fall column, never a big
-     generic box; small default Area (4 m).
-  2. Fall Distance — drops wrap back to the ceiling just past pool
-     level, otherwise they keep stamping liquid UNDERWATER (invisible
-     jets that churn the pool and multiply FLIP particle counts).
+  1. Domain volume — fitted to the pools + impact footprint + splash
+     headroom, never the fall column or a big generic box.
+  2. One injection per drop — a moving flow mesh would otherwise stamp a
+     new blob every frame (and underwater, multiplying FLIP particles).
   3. Live cell/RAM estimate in the panel, and a confirmation before
      bakes that would realistically exhaust memory.
 """
@@ -77,6 +81,19 @@ def find_emitter(entry):
     return None
 
 
+def find_rain_drops(entry):
+    """The rendered rain: same drop field as the emitter, but no Fluid FLOW."""
+    col = entry.root_collection
+    if col is None:
+        return None
+    for obj in col.all_objects:
+        if _drops_modifier(obj, entry.uuid) is None:
+            continue
+        if not any(m.type == "FLUID" for m in obj.modifiers):
+            return obj
+    return None
+
+
 def _drops_modifier(emitter, assembly_uuid):
     if emitter is None:
         return None
@@ -95,7 +112,9 @@ def _flow_settings(emitter):
     return None
 
 
-def _pool_top_z(entry, default=0.0):
+def water_level(entry, default=0.0):
+    """Height where rain meets water: the top of the highest pool mesh, or
+    the world floor (z = 0) while there are no pools."""
     top = None
     for p in entry.pool_sources:
         if p.obj is None:
@@ -119,13 +138,33 @@ def rain_velocity(entry):
                    -s * math.cos(ang)))
 
 
+# Emission radius in voxels.  Mantaflow does not register liquid flow
+# meshes much smaller than a cell (3.5 cm drops in a ~10 cm grid emitted
+# NOTHING; surface_distance does not inflate small closed meshes), so the
+# emitter's copy of each drop is at least this big.
+EMIT_MIN_VOXELS = 0.75
+
+
 def _drop_tree(uid, droplet_mat):
-    """Build the GN drop field: points scattered on the emitter plane,
-    each displaced along the rain velocity with a per-point random phase
-    that wraps at Fall Distance — a steady-state field of falling drop
-    spheres, REALIZED into actual mesh so Mantaflow samples it exactly
-    like any animated obstacle or pool mesh (the mechanism proven to
-    work).  Inputs: Density, Vx, Vy, Vz, Fall Distance, Drop Size, Seed.
+    """Build the GN drop field shared by the rain-drops and emitter objects.
+
+    Points are scattered on the emitter plane; each follows the ballistic
+    rain path  p = v*dt + (0, 0, -g*dt^2/2)  with a per-point random phase
+    that wraps every Fall Time (= the moment it reaches the water
+    surface).  Drops are instanced as small streak spheres and REALIZED
+    into real mesh.
+
+    Emit Only (emitter object): keep just the drops whose age dt lies in
+    [Emit Start, Emit Start + Emit Window).  With Emit Start = Fall Time -
+    one frame, each drop is injected into the simulation ONCE, in the
+    frame before it hits the water — the solver only ever sees impacts.
+    Real raindrops (1-3 mm) are far below any affordable voxel size, so
+    the FALL is rendered as thin geometry and only the SPLASH is liquid.
+    (A flow mesh that moves every frame would otherwise stamp a new blob
+    every frame — a trail of liquid per drop.)
+
+    The plane's edges are kept (faces removed) so the emitter stays
+    visible and selectable; loose edges emit no liquid.
     """
     nt = bpy.data.node_groups.new("AQS_GN_RainDrops", "GeometryNodeTree")
     naming.tag(nt, C.MODE_SIMRAIN, uid)
@@ -140,9 +179,13 @@ def _drop_tree(uid, droplet_mat):
             ("Vx", "NodeSocketFloat", 0.0),
             ("Vy", "NodeSocketFloat", 0.0),
             ("Vz", "NodeSocketFloat", -9.0),
-            ("Fall Distance", "NodeSocketFloat", 4.0),
-            ("Drop Size", "NodeSocketFloat", 0.035),
-            ("Seed", "NodeSocketInt", 0)):
+            ("Gravity", "NodeSocketFloat", 9.81),
+            ("Fall Time", "NodeSocketFloat", 0.4),
+            ("Drop Size", "NodeSocketFloat", 0.0025),
+            ("Seed", "NodeSocketInt", 0),
+            ("Emit Only", "NodeSocketBool", False),
+            ("Emit Start", "NodeSocketFloat", 0.0),
+            ("Emit Window", "NodeSocketFloat", 1.0 / 24.0)):
         sock = iface.new_socket(name, in_out="INPUT", socket_type=stype)
         sock.default_value = default
 
@@ -160,7 +203,7 @@ def _drop_tree(uid, droplet_mat):
 
     time = nt.nodes.new("GeometryNodeInputSceneTime")
 
-    def math(op, a=None, b=None, v0=None, v1=None):
+    def m(op, a=None, b=None, v0=None, v1=None):
         n = nt.nodes.new("ShaderNodeMath")
         n.operation = op
         if v0 is not None:
@@ -173,18 +216,20 @@ def _drop_tree(uid, droplet_mat):
             nt.links.new(b, n.inputs[1])
         return n
 
-    # T = FallDist / max(|Vz|, 0.25); phase = fract(t/T + rand)
-    vz_abs = math("ABSOLUTE", a=gin.outputs["Vz"])
-    vz_abs = math("MAXIMUM", a=vz_abs.outputs[0], v1=0.25)
-    T = math("DIVIDE", a=gin.outputs["Fall Distance"], b=vz_abs.outputs[0])
-    tt = math("DIVIDE", a=time.outputs["Seconds"], b=T.outputs[0])
-    ph = math("ADD", a=tt.outputs[0], b=rand.outputs[1])
-    ph = math("FRACT", a=ph.outputs[0])
-    dt = math("MULTIPLY", a=ph.outputs[0], b=T.outputs[0])  # time since spawn
+    # T = max(Fall Time, 1e-3); dt = fract(t/T + rand) * T  (time since spawn)
+    T = m("MAXIMUM", a=gin.outputs["Fall Time"], v1=1e-3)
+    tt = m("DIVIDE", a=time.outputs["Seconds"], b=T.outputs[0])
+    ph = m("ADD", a=tt.outputs[0], b=rand.outputs[1])
+    ph = m("FRACT", a=ph.outputs[0])
+    dt = m("MULTIPLY", a=ph.outputs[0], b=T.outputs[0])
 
-    ox = math("MULTIPLY", a=gin.outputs["Vx"], b=dt.outputs[0])
-    oy = math("MULTIPLY", a=gin.outputs["Vy"], b=dt.outputs[0])
-    oz = math("MULTIPLY", a=gin.outputs["Vz"], b=dt.outputs[0])
+    ox = m("MULTIPLY", a=gin.outputs["Vx"], b=dt.outputs[0])
+    oy = m("MULTIPLY", a=gin.outputs["Vy"], b=dt.outputs[0])
+    vzt = m("MULTIPLY", a=gin.outputs["Vz"], b=dt.outputs[0])
+    dt2 = m("MULTIPLY", a=dt.outputs[0], b=dt.outputs[0])
+    half_g = m("MULTIPLY", a=gin.outputs["Gravity"], v1=0.5)
+    drop = m("MULTIPLY", a=half_g.outputs[0], b=dt2.outputs[0])
+    oz = m("SUBTRACT", a=vzt.outputs[0], b=drop.outputs[0])
     comb = nt.nodes.new("ShaderNodeCombineXYZ")
     nt.links.new(ox.outputs[0], comb.inputs["X"])
     nt.links.new(oy.outputs[0], comb.inputs["Y"])
@@ -194,12 +239,38 @@ def _drop_tree(uid, droplet_mat):
     nt.links.new(dist.outputs["Points"], setpos.inputs["Geometry"])
     nt.links.new(comb.outputs[0], setpos.inputs["Offset"])
 
+    # Emit Only: delete drops whose age is outside
+    # [Emit Start, Emit Start + Emit Window).
+    early = nt.nodes.new("FunctionNodeCompare")
+    early.data_type = "FLOAT"
+    early.operation = "LESS_THAN"
+    nt.links.new(dt.outputs[0], early.inputs[0])
+    nt.links.new(gin.outputs["Emit Start"], early.inputs[1])
+    w_end = m("ADD", a=gin.outputs["Emit Start"], b=gin.outputs["Emit Window"])
+    late = nt.nodes.new("FunctionNodeCompare")
+    late.data_type = "FLOAT"
+    late.operation = "GREATER_EQUAL"
+    nt.links.new(dt.outputs[0], late.inputs[0])
+    nt.links.new(w_end.outputs[0], late.inputs[1])
+    outside = nt.nodes.new("FunctionNodeBooleanMath")
+    outside.operation = "OR"
+    nt.links.new(early.outputs[0], outside.inputs[0])
+    nt.links.new(late.outputs[0], outside.inputs[1])
+    cull = nt.nodes.new("FunctionNodeBooleanMath")
+    cull.operation = "AND"
+    nt.links.new(gin.outputs["Emit Only"], cull.inputs[0])
+    nt.links.new(outside.outputs[0], cull.inputs[1])
+    keep = nt.nodes.new("GeometryNodeDeleteGeometry")
+    keep.domain = "POINT"
+    nt.links.new(setpos.outputs["Geometry"], keep.inputs["Geometry"])
+    nt.links.new(cull.outputs[0], keep.inputs["Selection"])
+
     ico = nt.nodes.new("GeometryNodeMeshIcoSphere")
     ico.inputs["Subdivisions"].default_value = 1
     nt.links.new(gin.outputs["Drop Size"], ico.inputs["Radius"])
 
     inst = nt.nodes.new("GeometryNodeInstanceOnPoints")
-    nt.links.new(setpos.outputs["Geometry"], inst.inputs["Points"])
+    nt.links.new(keep.outputs["Geometry"], inst.inputs["Points"])
     nt.links.new(ico.outputs["Mesh"], inst.inputs["Instance"])
 
     scale = nt.nodes.new("GeometryNodeScaleInstances")
@@ -213,53 +284,127 @@ def _drop_tree(uid, droplet_mat):
     if droplet_mat is not None:
         setmat.inputs["Material"].default_value = droplet_mat
     nt.links.new(real.outputs["Geometry"], setmat.inputs["Geometry"])
-    nt.links.new(setmat.outputs["Geometry"], gout.inputs["Geometry"])
+
+    # Plane outline (edges only) so the emitter can be seen and selected.
+    outline = nt.nodes.new("GeometryNodeDeleteGeometry")
+    outline.domain = "FACE"
+    outline.mode = "ONLY_FACE"
+    nt.links.new(gin.outputs["Geometry"], outline.inputs["Geometry"])
+
+    join = nt.nodes.new("GeometryNodeJoinGeometry")
+    nt.links.new(outline.outputs["Geometry"], join.inputs["Geometry"])
+    nt.links.new(setmat.outputs["Geometry"], join.inputs["Geometry"])
+    nt.links.new(join.outputs["Geometry"], gout.inputs["Geometry"])
 
     for idx, node in enumerate(nt.nodes):
         node.location = ((idx % 10) * 200, -(idx // 10) * 220)
     return nt
 
 
-def apply_rain_params(context, entry):
-    """Angle/Direction/Speed -> the GN drop field + flow velocity.
+def _fall_time(fall, vz_abs, g):
+    """Seconds for a drop launched down at vz_abs (m/s) under gravity g to
+    fall `fall` metres:  fall = vz*T + g*T^2/2."""
+    vz_abs = max(vz_abs, 0.25)
+    if g <= 1e-6:
+        return fall / vz_abs
+    return (-vz_abs + math.sqrt(vz_abs * vz_abs + 2.0 * g * fall)) / g
 
-    Fall Distance auto-cuts drops just past pool level: the loop wraps
-    them back to the ceiling, so nothing ever stamps liquid underwater.
+
+def _voxel_size(entry):
+    dom = sw.find_domain_object(entry)
+    dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
+        if dom else None
+    ds = getattr(dmod, "domain_settings", None)
+    if ds is None or ds.resolution_max <= 0:
+        return None
+    return max(sw.object_dims(dom)) / ds.resolution_max
+
+
+def emission_radius(entry):
+    """Drop radius the EMITTER uses: the user's Drop Size, but never below
+    EMIT_MIN_VOXELS cells — smaller drops are invisible to Mantaflow."""
+    dx = _voxel_size(entry)
+    size = entry.drop_size
+    return size if dx is None else max(size, EMIT_MIN_VOXELS * dx)
+
+
+def is_legacy_tree(mod):
+    """Drop trees from before impact emission (v0.13.4 and older)."""
+    return gn_io._socket_identifier(mod, "Emit Start") is None
+
+
+def rain_timing(entry, scene):
+    """(velocity at release, gravity, fall time to the water surface,
+    velocity at impact) for the current emitter placement."""
+    emitter = find_emitter(entry)
+    v = rain_velocity(entry)
+    g = max(-scene.gravity.z, 0.0) if scene.use_gravity else 0.0
+    # Fresh transform: right after creation matrix_world is still identity
+    # (the "rain only falls 0.5 m until you tweak something" bug).
+    top = _world_matrix(emitter).translation.z if emitter else 4.0
+    fall = max(top - water_level(entry), 0.5)
+    t_fall = _fall_time(fall, abs(v.z), g)
+    v_hit = Vector((v.x, v.y, v.z - g * t_fall))
+    return v, g, t_fall, v_hit
+
+
+def apply_rain_params(context, entry):
+    """Rain settings -> both drop-field modifiers + flow velocity.
+
+    Drops wrap exactly when they reach the water surface: the rendered
+    drop disappears into the water in the same frame the emitter injects
+    its liquid copy (with the impact velocity) for the splash.
     """
     emitter = find_emitter(entry)
-    mod = _drops_modifier(emitter, entry.uuid)
-    fs = _flow_settings(emitter)
-    if emitter is None or mod is None:
+    if emitter is None:
         return
-    v = rain_velocity(entry)
-    gn_io.set_input(mod, "Vx", float(v.x))
-    gn_io.set_input(mod, "Vy", float(v.y))
-    gn_io.set_input(mod, "Vz", float(v.z))
-    fall = max(emitter.matrix_world.translation.z
-               - _pool_top_z(entry) + 0.15, 0.5)
-    gn_io.set_input(mod, "Fall Distance", float(fall))
+    rain = find_rain_drops(entry)
+    scene = context.scene if context is not None else bpy.context.scene
+    v, g, t_fall, v_hit = rain_timing(entry, scene)
+    fps = scene.render.fps / scene.render.fps_base
+    window = 1.0 / max(fps, 1e-3)
+    sca = _world_matrix(emitter).to_scale()
+    # Density is per m^2 of the scaled plane; GN distributes in local space.
+    density = entry.rain_density * abs(sca.x * sca.y)
+
+    for obj, emit in ((emitter, True), (rain, False)):
+        mod = _drops_modifier(obj, entry.uuid)
+        if mod is None:
+            continue
+        legacy = is_legacy_tree(mod)
+        gn_io.set_input(mod, "Vx", float(v.x))
+        gn_io.set_input(mod, "Vy", float(v.y))
+        gn_io.set_input(mod, "Vz", float(v.z))
+        gn_io.set_input(mod, "Gravity", float(g))
+        gn_io.set_input(mod, "Fall Time", float(t_fall))
+        gn_io.set_input(mod, "Density", float(density))
+        gn_io.set_input(mod, "Seed", int(entry.rain_seed))
+        gn_io.set_input(mod, "Emit Only", bool(emit))
+        # The frame before impact: the solver only ever sees splashes.
+        gn_io.set_input(mod, "Emit Start", float(max(t_fall - window, 0.0)))
+        gn_io.set_input(mod, "Emit Window", float(window))
+        size = emission_radius(entry) if (emit and not legacy) \
+            else entry.drop_size
+        gn_io.set_input(mod, "Drop Size", float(size))
+
+    fs = _flow_settings(emitter)
     if fs is not None:
-        try:  # stamped liquid inherits the drop velocity
-            fs.velocity_coord[0] = v.x
-            fs.velocity_coord[1] = v.y
-            fs.velocity_coord[2] = v.z
+        try:  # injected liquid hits the water at the real impact velocity
+            fs.velocity_coord[0] = v_hit.x
+            fs.velocity_coord[1] = v_hit.y
+            fs.velocity_coord[2] = v_hit.z
         except (TypeError, IndexError, AttributeError) as exc:
             print(f"[AquaSuite] velocity_coord write skipped: {exc}")
 
 
 def tune_drop_size(entry):
-    """Emission thickness >= ~1 voxel so small drops always register in
-    the grid, while the VISIBLE sphere size stays exactly what the user
-    chose (surface_distance inflates only the stamped liquid)."""
-    dom = sw.find_domain_object(entry)
-    dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
-        if dom else None
-    ds = getattr(dmod, "domain_settings", None)
+    """Resolution or domain size changed: re-derive the emission radius
+    (>= EMIT_MIN_VOXELS cells) and keep a ~1 voxel emission layer."""
+    dx = _voxel_size(entry)
     fs = _flow_settings(find_emitter(entry))
-    if ds is None or fs is None or ds.resolution_max <= 0:
-        return
-    dx = max(dom.dimensions) / ds.resolution_max
-    _safe(fs, "surface_distance", min(max(0.9 * dx, 0.01), 0.35))
+    if dx is not None and fs is not None:
+        _safe(fs, "surface_distance", min(max(0.9 * dx, 0.01), 0.35))
+    apply_rain_params(None, entry)
 
 
 def apply_quality(context, entry):
@@ -280,46 +425,53 @@ def apply_quality(context, entry):
     tune_drop_size(entry)
 
 
-def fit_domain(context, entry):
-    """Fit the domain to pools + rain fall column (pitfall #1).
+SPLASH_HEADROOM = 0.6   # metres of air above the water for splash crowns
 
-    Bounds = union of pool AABBs, expanded by the rain area footprint
-    (shifted by drift from Angle/Direction) up to the emitter plane,
-    with modest padding.  Voxels never pay for air the rain can't reach.
+
+def fit_domain(context, entry):
+    """Fit the domain to where the rain HITS the water (pitfall #1).
+
+    The fall is rendered geometry, not liquid, so the domain no longer
+    spans the fall column: it covers the pools plus the rain footprint at
+    water level (shifted by the Angle/Direction drift), from the pool
+    bottom to SPLASH_HEADROOM above the surface — tall enough that the
+    drops injected one frame before impact start inside it.  Far fewer
+    cells than a domain reaching up to the emitter.
     """
     dom = sw.find_domain_object(entry)
     emitter = find_emitter(entry)
     if dom is None or emitter is None:
         return
-    e_loc = _world_matrix(emitter).translation
-    # The emitter's REAL world footprint (respects manual move/scale/rotate),
-    # not "location ± Rain Area / 2".
-    mins, maxs = emitter_footprint(emitter)
+    scene = context.scene if context is not None else bpy.context.scene
+    level = water_level(entry)
+    v, _g, t_fall, v_hit = rain_timing(entry, scene)
+    fps = scene.render.fps / scene.render.fps_base
 
-    floor_z = None
+    # Rain footprint where drops reach the water: the emitter's REAL world
+    # footprint (respects manual move/scale/rotate) shifted by the drift.
+    e_min, e_max = emitter_footprint(emitter)
+    dx_, dy_ = v.x * t_fall, v.y * t_fall
+    mins = Vector((e_min.x + dx_, e_min.y + dy_, level))
+    maxs = Vector((e_max.x + dx_, e_max.y + dy_, level))
+
+    bottom = None
     for p in entry.pool_sources:
         if p.obj is None:
             continue
         p_min, p_max = sw.world_bbox(p.obj)
         mins = Vector((min(mins[i], p_min[i]) for i in range(3)))
         maxs = Vector((max(maxs[i], p_max[i]) for i in range(3)))
-        floor_z = p_min.z if floor_z is None else min(floor_z, p_min.z)
-    if floor_z is None:
-        floor_z = e_loc.z - 4.0  # no pools yet: default catch depth
+        bottom = p_min.z if bottom is None else min(bottom, p_min.z)
+    if bottom is None:
+        bottom = level - 0.3  # no pool meshes: drops collect on the floor
 
-    # Horizontal drift of angled rain over the fall height.
-    fall = max(e_loc.z - floor_z, 0.5)
-    v = rain_velocity(entry)
-    vz = max(abs(v.z), 0.5)
-    drift = Vector((v.x, v.y, 0.0)) * (fall / vz)
-    for i in range(2):
-        mins[i] = min(mins[i], mins[i] + drift[i])
-        maxs[i] = max(maxs[i], maxs[i] + drift[i])
+    # One frame of impact travel (+ the drop itself) must fit above water.
+    entry_height = 1.5 * abs(v_hit.z) / max(fps, 1e-3) + 0.1
+    top = level + max(SPLASH_HEADROOM, entry_height + 0.2)
 
-    pad = 0.25
-    top = max(maxs.z, e_loc.z)
-    mins = Vector((mins.x - pad, mins.y - pad, floor_z - pad))
-    maxs = Vector((maxs.x + pad, maxs.y + pad, top + pad))
+    pad = 0.15
+    mins = Vector((mins.x - pad, mins.y - pad, bottom - pad))
+    maxs = Vector((maxs.x + pad, maxs.y + pad, top))
     dom.location = (mins + maxs) * 0.5
     dom.scale = (maxs - mins)
     dom.rotation_euler = (0.0, 0.0, 0.0)
@@ -330,7 +482,7 @@ def memory_estimate(dom, effective_res):
     """(million_cells, est_gb) for the current domain/resolution."""
     if dom is None or effective_res <= 0:
         return 0.0, 0.0
-    dims = [max(d, 1e-3) for d in dom.dimensions]
+    dims = [max(d, 1e-3) for d in sw.object_dims(dom)]
     dx = max(dims) / effective_res
     cells = 1.0
     for d in dims:
@@ -380,34 +532,52 @@ def apply_area(entry):
     emitter.scale.y = entry.rain_area / size_y
 
 
-def build_emitter(context, col, uid, area, location, density=6.0):
-    """Build the rain emitter: a plane you can move/scale, with a GN
-    modifier generating a steady-state field of falling drop spheres
-    (realized mesh), and a Fluid FLOW (MESH source — the SAME mechanism
-    as pools and animated obstacles) so the drops physically splash into
-    the domain.  Returns (emitter, gn_modifier).
+def build_emitter(context, col, uid, area, location):
+    """Build the rain rig from one plane you can move/scale/keyframe:
 
-    Flow behaviour is INFLOW: GEOMETRY only fills liquid once, at the
-    first simulated frame (that is what Still Water relies on), so the
-    rain would stop after frame 1.
+    * DROPS (child of the emitter, sharing its mesh): the full falling
+      drop field at the user's Drop Size (real raindrops are 1-3 mm) —
+      this is the rain you see and render.  Unselectable: move the
+      emitter, the drops follow.
+    * EMITTER (the plane): the same drop field in Emit Only mode + Fluid
+      FLOW (mesh source, INFLOW).  Each drop is injected once, in the
+      frame before it reaches the water, at least ~1 cell big and with
+      its impact velocity — the solver only simulates splashes/ripples.
+      Not rendered (the baked liquid is).
+
+    INFLOW, not GEOMETRY: GEOMETRY fills liquid once, at the first
+    simulated frame (what Still Water relies on).  Returns (emitter,
+    drops).
     """
     emitter = rain_mod.make_plane("AQS_SimRain_Emitter", area,
                                   C.MODE_SIMRAIN, uid, col)
     emitter.location = location
+    emitter.hide_render = True
 
     droplet_mat = mats.droplet(C.MODE_SIMRAIN, uid)
     nt = _drop_tree(uid, droplet_mat)
-    mod = emitter.modifiers.new("AQS Rain Drops", "NODES")
+    mod = emitter.modifiers.new("AQS Rain Emit", "NODES")
     mod.node_group = nt
-    gn_io.set_input(mod, "Density", density)
 
     flow = emitter.modifiers.new("AQS Flow", "FLUID")
     flow.fluid_type = "FLOW"
     fs = flow.flow_settings
     fs.flow_type = "LIQUID"
-    fs.flow_behavior = "INFLOW"          # emit every frame (see docstring)
+    fs.flow_behavior = "INFLOW"
     _safe(fs, "use_initial_velocity", True)
-    return emitter, mod
+    # Velocity comes ONLY from velocity_coord: the emitted mesh changes
+    # every frame, so "velocity from mesh motion" would pair unrelated
+    # drops between frames and inject garbage velocities.
+    _safe(fs, "velocity_factor", 0.0)
+    _safe(fs, "velocity_normal", 0.0)
+
+    drops = naming.new_mesh_object(col, "AQS_SimRain_Drops", emitter.data,
+                                   C.MODE_SIMRAIN, uid)
+    drops.parent = emitter
+    drops.hide_select = True   # select/move the emitter; the drops follow
+    dmod = drops.modifiers.new("AQS Rain Drops", "NODES")
+    dmod.node_group = nt
+    return emitter, drops
 
 
 # ----------------------------------------------------------------------
@@ -465,13 +635,11 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
         naming.tag(pool_col, C.MODE_SIMRAIN, uid)
         col.children.link(pool_col)
 
-        # GN drop-field emitter: drops are real mesh, sampled by the
-        # fluid exactly like pools and animated obstacles (proven path).
+        # GN drop field: emitter (injects impacts) + rendered rain drops.
         frames = 60
-        emitter, _gnmod = build_emitter(
+        emitter, _drops = build_emitter(
             context, col, uid, self.area,
-            scene.cursor.location + Vector((0, 0, self.height)),
-            density=max(0.2, self.rate / max(self.area ** 2, 1.0)))
+            scene.cursor.location + Vector((0, 0, self.height)))
 
         # Domain
         dmesh = bpy.data.meshes.new("AQS_SimRain_Domain")
@@ -500,6 +668,7 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
         entry["rain_speed"] = self.speed
         entry["rain_angle"] = self.angle
         entry["rain_direction"] = self.direction
+        entry["rain_density"] = max(0.2, self.rate / max(self.area ** 2, 1.0))
 
         # Tail setup: each guarded so a single RNA quirk can't roll back
         # the whole creation (leaving no emitter behind).
@@ -520,9 +689,8 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
         except Exception:
             pass
         self.report({"INFO"},
-                    "Rain Simulation created — rain is visible immediately "
-                    "(scrub any frame). Add pool meshes and Bake to make "
-                    "the drops splash into them")
+                    "Rain Simulation created — the drops render right away; "
+                    "add pool meshes and Bake for the splashes and ripples")
         return {"FINISHED"}
 
 
@@ -608,6 +776,8 @@ class AQS_OT_rain_sim_rebuild_emitter(bpy.types.Operator):
         # droplets).  Apart from the domain, everything this assembly owns
         # is emitter rig, so select by ownership — never by object name.
         # Pool sources are user objects (no owner tag) and are skipped too.
+        old = find_emitter(entry)
+        old_loc = _world_matrix(old).translation.copy() if old else None
         doomed = set()
         for obj in list(col.all_objects):
             if naming.owned_by(obj, entry.uuid) and obj is not dom \
@@ -623,11 +793,11 @@ class AQS_OT_rain_sim_rebuild_emitter(bpy.types.Operator):
                 except Exception:
                     pass
 
-        loc = context.scene.cursor.location + Vector((0, 0, 4.0))
-        if dom is not None:
-            loc = Vector((dom.location.x, dom.location.y,
-                          dom.location.z + dom.dimensions.z * 0.5 - 0.15))
-        emitter, _gnmod = build_emitter(
+        # Keep the old emitter's placement (the domain now only covers the
+        # water, so it no longer tells us where the rain starts).
+        loc = old_loc if old_loc is not None else Vector(
+            (0.0, 0.0, water_level(entry) + 4.0))
+        emitter, _drops = build_emitter(
             context, col, entry.uuid, entry.rain_area, loc)
         for step in (fit_domain, apply_rain_params, apply_quality):
             try:
@@ -640,9 +810,8 @@ class AQS_OT_rain_sim_rebuild_emitter(bpy.types.Operator):
         except Exception:
             pass
         self.report({"INFO"},
-                    "Rain emitter rebuilt (mesh drop field) — rain visible "
-                    "on any frame; Free the old bake and re-bake for pool "
-                    "splashes")
+                    "Rain emitter rebuilt (drops + impact emitter) — "
+                    "Free the old bake and re-bake")
         return {"FINISHED"}
 
 
@@ -672,6 +841,16 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
         lines.append(f"drop field (GN): {'ok' if mod else 'MISSING'}")
         if mod is None:
             problems.append("GN drop field missing — click Rebuild Emitter")
+        elif is_legacy_tree(mod):
+            problems.append("emitter is from an older version (it doesn't "
+                            "inject drops at impact) — click Rebuild "
+                            "Emitter")
+        lines.append(f"rain drops object: "
+                     f"{'ok' if find_rain_drops(entry) else 'none'}")
+        if mod is not None:
+            lines.append(f"emission drop radius: "
+                         f"{emission_radius(entry)*100:.1f} cm "
+                         f"(visible {entry.drop_size*100:.1f} cm)")
         lines.append(f"flow modifier: {'ok' if fs else 'MISSING'}")
         if fs is not None:
             lines.append(f"behavior: {getattr(fs, 'flow_behavior', '?')} | "
@@ -686,21 +865,27 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
         if ds is None:
             problems.append("no fluid domain")
         else:
-            dx = max(dom.dimensions) / max(ds.resolution_max, 1)
+            dx = max(sw.object_dims(dom)) / max(ds.resolution_max, 1)
             lines.append(f"resolution: {ds.resolution_max} | cell "
                          f"{dx*100:.1f} cm | emission thickness "
                          f"{getattr(fs, 'surface_distance', 0)*100:.1f} cm"
                          if fs else "")
             if emitter is not None:
-                e = emitter.matrix_world.translation
+                # The domain covers only the water: check that the point
+                # where the rain lands (emitter centre + drift, at water
+                # level) is inside it.
+                v, _g, t_fall, _v_hit = rain_timing(entry, context.scene)
+                e = _world_matrix(emitter).translation
+                hit = Vector((e.x + v.x * t_fall, e.y + v.y * t_fall,
+                              water_level(entry)))
                 dmin, dmax = sw.world_bbox(dom)
-                inside = all(dmin[i] - 1e-4 <= e[i] <= dmax[i] + 1e-4
+                inside = all(dmin[i] - 1e-4 <= hit[i] <= dmax[i] + 1e-4
                              for i in range(3))
-                lines.append(f"emitter inside domain: "
+                lines.append(f"rain lands inside domain: "
                              f"{'yes' if inside else 'NO'}")
                 if not inside:
-                    problems.append("emitter outside the domain — click "
-                                    "Fit Domain")
+                    problems.append("the rain lands outside the domain — "
+                                    "click Fit Domain")
         if len(entry.pool_sources) == 0:
             lines.append("pools: none (drops collect on the domain floor)")
         if not bpy.data.filepath:
@@ -715,9 +900,8 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
             self.report({"ERROR"}, "Problems: " + "; ".join(problems))
         else:
             self.report({"INFO"},
-                        "Coupling chain OK — drops are real mesh geometry "
-                        "emitting liquid every frame. Free + re-bake if "
-                        "you changed anything")
+                        "Coupling chain OK — each drop is injected once "
+                        "at spawn. Free + re-bake if you changed anything")
         return {"FINISHED"}
 
 

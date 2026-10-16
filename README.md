@@ -70,7 +70,7 @@ degradation* below).
 | Rain with impact ripples | **Create → Reactive Rain** | Press Play; use **Bake Ripples** before scrubbing the timeline |
 | Falling snow (7 flake shapes) | **Create → Snow** | Press Play |
 | Turn my mesh into liquid | Select the mesh → **Still Water** | Click the red **Bake (required)** button — Level 2 is Mantaflow FLIP and must bake |
-| Real simulated rain splashing into water | **Create → Rain Sim** (a setup menu opens) | Set Angle/Direction/Speed; select a mesh and click **＋** next to *Pool meshes* — it becomes water the rain physically splashes into. Bake (Draft first!) |
+| Real simulated rain splashing into water | **Create → Rain Sim** (a setup menu opens) | Set Angle/Direction/Speed; select a mesh and click **＋** next to *Pool meshes* — it becomes water the rain physically splashes into. Bake (Draft first!). The drops render right away; baking adds the splashes and ripples |
 | An aimable hose / jet | **Create → Water Hose** | Keyframe the cone-shaped nozzle empty; pick a regime (**Normal / Mist / Spray / Blast**). Mist is real-time; the liquid regimes must bake |
 
 ## The rules AquaSuite lives by
@@ -144,7 +144,7 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
 
 ## Build status — read this once
 
-This is **v0.13.3**, an implementation preview of the AquaSuite v1.0
+This is **v0.14.0**, an implementation preview of the AquaSuite v1.0
 technical design (TDD + Revision R1). Implemented and functional:
 
 - All seven modes create, play, and delete cleanly
@@ -159,8 +159,12 @@ technical design (TDD + Revision R1). Implemented and functional:
   warning and a persistent panel notice)
 - Hose **Fit Domain**: the domain shrink-wraps the jet's path; it refits
   automatically when Range or Spread changes (re-click after re-aiming)
-- Rain Sim with a Geometry Nodes drop field that emits liquid every
-  frame; Rain Area resizes the emitter and the fitted domain together
+- Rain Sim: thin rendered raindrops (2.5 mm default) fall the whole
+  way; each drop is injected into the liquid simulation only in the
+  frame before it hits the water, at its impact velocity, so the
+  solver simulates just the splashes and ripples — in a domain fitted
+  to the water, not the fall column. Rain Sims made with v0.13.4 or
+  older: click **Rebuild Emitter**
 - Preview/Final tier for particles + ocean resolution
 
 Not yet in this build (tracked for 1.0 final):
