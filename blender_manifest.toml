@@ -1,8 +1,7 @@
 schema_version = "1.0.0"
 
-# Blender 4.2+ Extension manifest.
-# On Blender 4.1 this file is ignored and the legacy bl_info in
-# __init__.py is used instead — the addon supports both.
+# Blender 4.2+ extension manifest — the single source of the add-on
+# version (read at runtime by constants.ADDON_VERSION).
 
 id = "aquasuite"
 version = "0.14.0"
@@ -11,7 +10,7 @@ tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
 maintainer = "AquaSuite"
 type = "add-on"
 
-website = "https://github.com/Blaxine/blender_aqua"
+website = "https://github.com/Blaxine/aquasuite"
 
 tags = ["Physics", "Object", "3D View"]
 
@@ -27,3 +26,15 @@ license = [
 
 [permissions]
 files = "Write simulation caches to //aquasuite_cache next to the .blend"
+
+# Only the add-on ships: plans, tests, local config and git data never do.
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/.*",
+  "/*.zip",
+  "/requirements/",
+  "/tests/",
+  "/aquasuite_cache/",
+]

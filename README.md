@@ -1,6 +1,6 @@
 # AquaSuite — Water FX
 
-**One-click, layered water for Blender 4.1+** — oceans, rain, reactive
+**One-click, layered water for Blender 4.2+** — oceans, rain, reactive
 ripples, snow, object-to-liquid, and an aimable water hose, behind a
 single panel with a consistent mental model:
 
@@ -17,7 +17,7 @@ domain — nothing is hidden magic).
 
 ## Requirements
 
-- Blender **4.1 LTS or newer** (4.2+ uses the new Extensions install path — see below)
+- Blender **4.2 or newer** (installed as an extension)
 - **Zero external dependencies** — AquaSuite uses only Blender's built-in
   Python (`bpy`, `bmesh`, `mathutils`) and the standard library. Nothing
   to pip-install, no internet access needed, nothing version-pinned
@@ -26,17 +26,13 @@ domain — nothing is hidden magic).
 
 ## Installation
 
-Two zips are provided — pick the one matching your Blender version and
-do **not** unzip it first.
+Install the **`aquasuite-<version>.zip`** you downloaded — do **not**
+unzip it first:
 
-### Blender 4.2 and newer (Extensions system)
-
-Use **`aquasuite-extension-blender42.zip`**:
-
-1. **Edit → Preferences → Add-ons**
-2. Click the **dropdown arrow (▾) in the top-right corner** of the
-   Add-ons page → **Install from Disk…**
-3. Select `aquasuite-extension-blender42.zip`.
+1. **Edit → Preferences → Get Extensions** (Blender 4.2+)
+2. Click the **dropdown arrow (▾) in the top-right corner** →
+   **Install from Disk…**
+3. Select `aquasuite-<version>.zip`.
 4. It installs **and enables automatically** — search **“aqua”** and you
    should see **AquaSuite — Water FX** with its checkbox already ticked.
 
@@ -45,15 +41,7 @@ installing and repeat — any registration error will print a Python
 traceback there. (Also make sure the search box is clear and
 *Enabled Add-ons Only* is unchecked.)
 
-### Blender 4.1 (legacy add-on system)
-
-Use **`aquasuite-legacy-blender41.zip`**:
-
-1. **Edit → Preferences → Add-ons → Install…**
-2. Select `aquasuite-legacy-blender41.zip`, then tick the checkbox next
-   to **“AquaSuite — Water FX”**.
-
-### After either install
+### After installing
 
 In the 3D Viewport, press **N** and open the new **Water** tab.
 

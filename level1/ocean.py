@@ -59,7 +59,7 @@ def _math(nt, op, a=None, b=None, value0=None, value1=None):
 def build_ocean_tree(mode, uuid_):
     nt = bpy.data.node_groups.new(NG_NAME, "GeometryNodeTree")
     naming.tag(nt, mode, uuid_)
-    nt[C.BUILD_PROP] = C.BUILD_TAG
+    nt[C.WAVE_TABLE_PROP] = C.WAVE_TABLE_TAG
     nt.is_modifier = True
 
     iface = nt.interface

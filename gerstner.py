@@ -16,7 +16,7 @@ N_LAYERS = 5
 TWO_PI = 2.0 * math.pi
 
 # Fixed deterministic per-layer direction offsets (radians, scaled by the
-# user 'Spread' input).  Table is frozen: changing it is a BUILD_TAG bump.
+# user 'Spread' input).  Table is frozen: changing it is a WAVE_TABLE_TAG bump.
 DIR_OFFSETS = (0.0, 0.31, -0.47, 0.83, -0.71, 1.13, -1.02, 0.56)
 
 

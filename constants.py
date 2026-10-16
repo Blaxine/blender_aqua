@@ -4,7 +4,6 @@
 import os as _os
 
 ADDON_NAME = "aquasuite"
-BUILD_TAG = "1.0.0"
 
 
 def _manifest_version():
@@ -27,7 +26,11 @@ DATA_VERSION = 1
 
 # --- Ownership / naming ------------------------------------------------------
 OWNER_PROP = "aqs_owner"          # "<mode_id>:<assembly_uuid>" or "SHARED"
-BUILD_PROP = "aqs_build"
+# Ocean wave-table version, stored on the ocean node tree.  Independent of
+# the add-on version and of DATA_VERSION: bump only when gerstner.py's
+# frozen layer table changes (every ocean would look different).
+WAVE_TABLE_PROP = "aqs_build"
+WAVE_TABLE_TAG = "1.0.0"
 EFFECTOR_OWNERS_PROP = "aqs_eff_owners"   # JSON list of assembly uuids
 AUTHORED_PROP = "aqs_authored"            # tier snapshot storage (per-ID)
 SRC_PROP = "aqs_source_of"                # marks a USER object as a Still-Water
