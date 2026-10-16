@@ -130,8 +130,9 @@ class AQS_OT_rain_reactive_create(bpy.types.Operator):
             configure_canvas(context, floor)
             configure_brush(context, emitter, psys)
         except RuntimeError as exc:
-            self.report({"ERROR"}, str(exc))
-            return {"CANCELLED"}
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't create Reactive Rain",
+                               exc, mode=C.MODE_RRAIN)
 
         registry.add(scene, C.MODE_RRAIN, uid, primary=floor,
                      root_collection=col)
@@ -164,8 +165,9 @@ class AQS_OT_bake_ripples(bpy.types.Operator):
                                        point_cache=surf.point_cache):
                 bpy.ops.ptcache.bake(bake=True)
         except Exception as exc:
-            self.report({"ERROR"}, f"Bake failed: {exc}")
-            return {"CANCELLED"}
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't bake the ripples", exc,
+                               mode=C.MODE_RRAIN, uuid=self.uuid)
         self.report({"INFO"}, "Ripples baked")
         return {"FINISHED"}
 

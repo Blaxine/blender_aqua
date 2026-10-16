@@ -464,8 +464,9 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
                 # but an animator shouldn't have to know that.)
                 bpy.ops.fluid.bake_all("INVOKE_DEFAULT")
         except Exception as exc:
-            self.report({"ERROR"}, f"Bake failed: {exc}")
-            return {"CANCELLED"}
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't start the bake", exc,
+                               mode=entry.mode, uuid=self.uuid)
         finally:
             if was_hidden:
                 dom.hide_set(True)
@@ -495,8 +496,9 @@ class AQS_OT_free_fluid(bpy.types.Operator):
             with _fluid_op_override(context, dom):
                 bpy.ops.fluid.free_all()
         except Exception as exc:
-            self.report({"ERROR"}, f"Free failed: {exc}")
-            return {"CANCELLED"}
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't free the bake", exc,
+                               mode=entry.mode if entry else "", uuid=self.uuid)
         finally:
             if was_hidden:
                 dom.hide_set(True)

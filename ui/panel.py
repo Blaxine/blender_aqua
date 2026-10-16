@@ -4,7 +4,7 @@
 import bpy
 
 from .. import constants as C
-from ..core import registry, delete
+from ..core import registry, delete, errors
 from ..level1 import ocean as ocean_mod
 
 
@@ -366,9 +366,10 @@ class AQS_PT_water(bpy.types.Panel):
             except Exception as exc:
                 err = box.row()
                 err.alert = True
-                err.label(text=f"Panel error: {exc}", icon="ERROR")
-                import traceback
-                traceback.print_exc()
+                err.label(text="This setup can't be displayed", icon="ERROR")
+                errors.record("AquaSuite couldn't draw a setup", exc,
+                              mode=entry.mode, uuid=entry.uuid)
+                errors.schedule()
 
     def _draw_entry(self, box, context, entry):
         if entry.mode == C.MODE_OCEAN:

@@ -116,10 +116,14 @@ def aqs_buoy_tick(scene, _depsgraph=None):
         try:
             _tick_assembly(entry, t)
         except Exception as exc:
-            # NEVER break animation playback: log once per assembly.
+            # NEVER break animation playback: record once per assembly; the
+            # popup waits until playback/rendering stops.
             if entry.uuid not in _error_logged:
                 _error_logged.add(entry.uuid)
-                print(f"[AquaSuite] buoy tick error on {entry.uuid[:8]}: {exc}")
+                from . import errors
+                errors.record("AquaSuite couldn't move the floating objects",
+                              exc, mode=entry.mode, uuid=entry.uuid)
+                errors.schedule()
 
 
 def register():

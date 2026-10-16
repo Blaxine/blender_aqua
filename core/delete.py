@@ -11,7 +11,6 @@ import functools
 import json
 import os
 import shutil
-import traceback
 
 import bpy
 
@@ -200,14 +199,11 @@ def guarded_create(execute):
     @functools.wraps(execute)
     def wrapper(self, context):
         before = _owner_uuids()
+        from . import errors
         try:
             result = execute(self, context)
         except Exception as exc:
-            traceback.print_exc()
-            self.report({"ERROR"},
-                        f"AquaSuite: creation failed: {exc} "
-                        "(full traceback in the System Console)")
-            result = {"CANCELLED"}
+            result = errors.fail(self, errors._operator_title(self), exc)
         if "CANCELLED" in result:
             for u in _owner_uuids() - before:
                 delete_assembly(context.scene, u)

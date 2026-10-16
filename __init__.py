@@ -13,14 +13,14 @@ import bpy
 from bpy.props import CollectionProperty, EnumProperty
 
 from . import constants as C
-from .core import registry, handlers, quality
+from .core import registry, handlers, quality, errors
 from .level1 import ocean, rain, rain_reactive, snow
 from .level2 import still_water, rain_sim
 from .level3 import hose
 from .ui import panel
 
 
-_MODULES = (ocean, rain, rain_reactive, snow, still_water, rain_sim,
+_MODULES = (errors, ocean, rain, rain_reactive, snow, still_water, rain_sim,
             hose, panel)
 
 
@@ -31,7 +31,11 @@ def _all_classes():
 
 
 def register():
+    errors.register()
     for cls in _all_classes():
+        if issubclass(cls, bpy.types.Operator):
+            # No AquaSuite button may fail with a raw Python traceback.
+            cls.execute = errors.guard_operator(cls.execute)
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.aqs_assemblies = CollectionProperty(
@@ -52,6 +56,7 @@ def register():
 
 def unregister():
     handlers.unregister()
+    errors.unregister()
 
     del bpy.types.Scene.aqs_quality
     del bpy.types.Scene.aqs_assemblies

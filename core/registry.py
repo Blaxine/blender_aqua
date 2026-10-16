@@ -13,6 +13,7 @@ from bpy.props import (
 )
 
 from .. import constants as C
+from . import errors
 
 
 class AQS_PoolSourceEntry(bpy.types.PropertyGroup):
@@ -38,6 +39,7 @@ class AQS_BuoyEntry(bpy.types.PropertyGroup):
     added_constraints: StringProperty(default="")  # ';'-joined names, restore record
 
 
+@errors.guard_update("AquaSuite couldn't apply that change")
 def _resolution_update(self, context):
     """Single authoritative resolution per liquid assembly.
 
@@ -61,6 +63,7 @@ def _resolution_update(self, context):
             ds.resolution_max = int(self.base_resolution)
 
 
+@errors.guard_update("AquaSuite couldn't apply that change")
 def _rain_params_update(self, context):
     if self.mode != "SIMRAIN":
         return
@@ -68,6 +71,7 @@ def _rain_params_update(self, context):
     rain_sim.apply_rain_params(context, self)
 
 
+@errors.guard_update("AquaSuite couldn't apply that change")
 def _rain_domain_update(self, context):
     if self.mode != "SIMRAIN":
         return
@@ -77,6 +81,7 @@ def _rain_domain_update(self, context):
     rain_sim.apply_quality(context, self)
 
 
+@errors.guard_update("AquaSuite couldn't apply that change")
 def _rain_area_update(self, context):
     """Rain Area resizes the emitter plane itself, then refits the domain
     around it — the slider changes where rain falls, not just the box."""
@@ -87,6 +92,7 @@ def _rain_area_update(self, context):
     _rain_domain_update(self, context)
 
 
+@errors.guard_update("AquaSuite couldn't apply that change")
 def _hose_params_update(self, context):
     if self.mode != "HOSE":
         return
@@ -94,6 +100,7 @@ def _hose_params_update(self, context):
     hose.apply_regime(context, self)
 
 
+@errors.guard_update("AquaSuite couldn't apply that change")
 def _hose_domain_update(self, context):
     if self.mode != "HOSE":
         return

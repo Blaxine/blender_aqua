@@ -606,15 +606,7 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
 
     @delete.guarded_create
     def execute(self, context):
-        try:
-            return self._build(context)
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            self.report({"ERROR"},
-                        f"Rain Sim creation failed: {exc} "
-                        "(full traceback in the System Console)")
-            return {"CANCELLED"}
+        return self._build(context)
 
     def _build(self, context):
         scene = context.scene
@@ -810,7 +802,7 @@ class AQS_OT_rain_sim_check(bpy.types.Operator):
     bl_idname = "aquasuite.rain_sim_check"
     bl_label = "Check Pool Link"
     bl_description = ("Diagnose the drop-to-pool coupling chain and report "
-                      "exactly what is broken (details in System Console)")
+                      "exactly what is broken")
 
     uuid: bpy.props.StringProperty()
 

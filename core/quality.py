@@ -61,4 +61,6 @@ def on_quality_update(self, context):
     try:
         apply_tier(context.scene)
     except Exception as exc:  # never break the UI on a tier flip
-        print(f"[AquaSuite] tier switch error: {exc}")
+        from . import errors
+        errors.record("AquaSuite couldn't switch the quality tier", exc)
+        errors.schedule()
