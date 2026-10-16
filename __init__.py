@@ -4,19 +4,10 @@
 One-click, tiered water toolkit: surface & precipitation (Level 1),
 volumetric liquid (Level 2), directed emission (Level 3).  See the
 bundled README.md and docs/TROUBLESHOOTING.md.
-"""
 
-bl_info = {
-    "name": "AquaSuite — Water FX",
-    "author": "AquaSuite",
-    "version": (0, 14, 0),
-    "blender": (4, 1, 0),
-    "location": "3D Viewport > N-panel > Water",
-    "description": "One-click layered water: ocean, rain, reactive rain, "
-                   "snow, still water (FLIP), water hose",
-    "category": "Physics",
-    "doc_url": "",
-}
+Blender 4.2+ extension: name, version and requirements live in
+blender_manifest.toml (the single source of the add-on version).
+"""
 
 import bpy
 from bpy.props import CollectionProperty, EnumProperty

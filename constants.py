@@ -1,8 +1,29 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """AquaSuite constants: name prefixes, build tags, defaults, user-facing strings."""
 
+import os as _os
+
 ADDON_NAME = "aquasuite"
 BUILD_TAG = "1.0.0"
+
+
+def _manifest_version():
+    """The add-on version: blender_manifest.toml is its single source."""
+    try:
+        import tomllib
+        path = _os.path.join(_os.path.dirname(__file__), "blender_manifest.toml")
+        with open(path, "rb") as fh:
+            return str(tomllib.load(fh).get("version", "0.0.0"))
+    except Exception:
+        return "0.0.0"
+
+
+ADDON_VERSION = _manifest_version()
+
+# Saved-data layout version stamped on every assembly entry.  0 = made by a
+# pre-release (pre-1.0) build.  Bump ONLY when a mode's saved layout
+# changes; old setups are then offered an opt-in upgrade, never converted.
+DATA_VERSION = 1
 
 # --- Ownership / naming ------------------------------------------------------
 OWNER_PROP = "aqs_owner"          # "<mode_id>:<assembly_uuid>" or "SHARED"

@@ -302,6 +302,21 @@ def _draw_hose(box, entry):
         _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
 
 
+def _draw_pre_release(box, entry):
+    """Setups made before 1.0 keep working as they are; nothing changes
+    unless the user rebuilds/recreates them."""
+    row = box.row(align=True)
+    row.label(text="Made with a pre-release version", icon="INFO")
+    if entry.mode == C.MODE_SIMRAIN:
+        op = row.operator("aquasuite.rain_sim_rebuild_emitter",
+                          text="Rebuild", icon="FILE_REFRESH")
+        op.uuid = entry.uuid
+    else:
+        sub = row.row()
+        sub.enabled = False
+        sub.label(text="Recreate to update")
+
+
 class AQS_PT_water(bpy.types.Panel):
     bl_label = "Water"
     bl_space_type = "VIEW_3D"
@@ -343,6 +358,8 @@ class AQS_PT_water(bpy.types.Panel):
             header.label(text=f"AQS_A_{entry.uuid[:8]}")
             op = header.operator("aquasuite.assembly_delete", text="", icon="TRASH")
             op.uuid = entry.uuid
+            if registry.is_pre_release(entry):
+                _draw_pre_release(box, entry)
 
             try:
                 self._draw_entry(box, context, entry)

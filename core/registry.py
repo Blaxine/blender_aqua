@@ -106,7 +106,10 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     uuid: StringProperty()
     mode: StringProperty()
     created: StringProperty()
-    version: StringProperty(default=C.BUILD_TAG)
+    # Stamp: saved-layout version (0 = pre-release build) and the add-on
+    # version that created this assembly.
+    data_version: IntProperty(default=0)
+    addon_version: StringProperty()
     primary: PointerProperty(type=bpy.types.Object)
     root_collection: PointerProperty(type=bpy.types.Collection)
     # Still Water restore records (source visibility policy §7.1.2/7.1.3)
@@ -199,12 +202,18 @@ def add(scene, mode, assembly_uuid, primary=None, root_collection=None):
     e.uuid = assembly_uuid
     e.mode = mode
     e.created = datetime.date.today().isoformat()
-    e.version = C.BUILD_TAG
+    e.data_version = C.DATA_VERSION
+    e.addon_version = C.ADDON_VERSION
     if primary is not None:
         e.primary = primary
     if root_collection is not None:
         e.root_collection = root_collection
     return e
+
+
+def is_pre_release(entry):
+    """Made by a pre-1.0 build: no compatibility promise, offer a rebuild."""
+    return entry.data_version < 1
 
 
 def remove(scene, assembly_uuid):
