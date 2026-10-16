@@ -61,6 +61,7 @@ def blast_clamp(requested, dom, resolution, fps, ts_max, cfl, safety=0.8):
 
 
 CLAMP_PROP = "aqs_clamp"   # (velocity, timesteps_needed) while clamped
+NOZZLE_MIN_VOXELS = 0.75   # smallest emitting nozzle radius, in grid cells
 
 
 def _set_clamp(entry, value):
@@ -78,9 +79,11 @@ def clamp_state(entry):
 
 
 def _aim_direction(nozzle):
-    """World-space jet direction: the nozzle empty's local -Z."""
+    """World-space jet direction: the nozzle empty's local -Z (from its
+    current transform — matrix_world is stale right after creation)."""
     from mathutils import Vector
-    return (nozzle.matrix_world.to_3x3() @ Vector((0.0, 0.0, -1.0))).normalized()
+    return (sw.world_matrix(nozzle).to_3x3()
+            @ Vector((0.0, 0.0, -1.0))).normalized()
 
 
 def fit_domain(context, entry):
@@ -97,7 +100,7 @@ def fit_domain(context, entry):
     if nozzle is None or dom is None:
         return
     rng = entry.hose_range
-    p0 = nozzle.matrix_world.translation.copy()
+    p0 = sw.world_matrix(nozzle).translation.copy()
     p1 = p0 + _aim_direction(nozzle) * rng
     radius = 0.25 + rng * math.tan(math.radians(max(entry.spread, 1.0)))
     pad = 0.3 + rng * 0.05  # splash-back margin
@@ -157,6 +160,13 @@ def apply_regime(context, entry, report=None):
         else p["resolution"]
     resolution = max(16, base_res // 2) if entry.draft else base_res
     secondaries = p["secondaries"] and not entry.draft
+
+    # Mantaflow ignores flow geometry much smaller than a grid cell (a 3 cm
+    # nozzle in 9-19 cm cells emitted ~nothing): the EMITTING disc is never
+    # below NOZZLE_MIN_VOXELS cells; Nozzle Radius keeps the user's value.
+    dx = max(sw.object_dims(dom)) / max(resolution, 1)
+    emit_radius = max(entry.nozzle_radius, NOZZLE_MIN_VOXELS * dx)
+    emitter.scale = (emit_radius / 0.03,) * 3
 
     requested = p["velocity"] * entry.pressure
     velocity, ts_needed = blast_clamp(requested, dom, resolution, fps,
@@ -231,15 +241,19 @@ class AQS_OT_hose_create(bpy.types.Operator):
         naming.tag(nozzle, C.MODE_HOSE, uid)
         naming.link_object(col, nozzle)
         nozzle.location = cursor + type(cursor)((0.0, 0.0, 1.5))
-        nozzle.rotation_euler = (math.pi, 0.0, 0.0)  # aim -Z (down)
+        # Unrotated: the aim is the nozzle's local -Z, i.e. straight down.
+        # (A 180-degree X rotation here turned the aim UP while the domain
+        # was fitted downward.)
+        nozzle.rotation_euler = (0.0, 0.0, 0.0)
 
         # Single -Z-facing disc: a double-capped cylinder emits along BOTH
         # cap normals, spraying half the inflow backwards at the nozzle.
+        # Local -Z is the aim (see _aim_direction); emitter and nozzle
+        # share that axis.
         emesh = bpy.data.meshes.new("AQS_Hose_Emitter")
         bm = bmesh.new()
-        ret = bmesh.ops.create_circle(bm, cap_ends=True, segments=12,
-                                      radius=0.03)
-        bmesh.ops.reverse_faces(bm, faces=bm.faces[:])  # normal -> -Z (aim)
+        bmesh.ops.create_circle(bm, cap_ends=True, segments=12, radius=0.03)
+        bmesh.ops.reverse_faces(bm, faces=bm.faces[:])  # normal -> local -Z
         bm.to_mesh(emesh)
         bm.free()
         emitter = naming.new_mesh_object(col, "AQS_Hose_Emitter", emesh,

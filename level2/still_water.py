@@ -44,6 +44,19 @@ SECONDARY_FLAGS = ("use_spray_particles", "use_foam_particles",
                    "use_bubble_particles")
 
 
+def world_matrix(obj):
+    """World matrix from the object's CURRENT loc/rot/scale.
+
+    obj.matrix_world is only refreshed by the next depsgraph update, so
+    right after an operator moves/rescales an object (or creates it) it
+    still holds the old transform; build it from matrix_basis instead
+    (parent-aware)."""
+    mw = obj.matrix_basis.copy()
+    if obj.parent is not None:
+        mw = world_matrix(obj.parent) @ obj.matrix_parent_inverse @ mw
+    return mw
+
+
 def object_dims(obj):
     """Size of a (domain) object from its CURRENT scale and BASE mesh.
 

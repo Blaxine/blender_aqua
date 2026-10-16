@@ -106,10 +106,11 @@ def main():
                 if status == "FAIL":
                     failures.append(f"[{blender['name']}] {name}: {check} — {detail}")
             bad = sum(1 for r in results if r[0] == "FAIL")
+            ran = sum(1 for r in results if r[0] != "SKIP")
+            skipped = len(results) - ran
             mark = "ok  " if not bad else "FAIL"
-            print(f"  {mark} {name}: {len(results) - bad}/{len(results)} "
-                  f"checks passed" + (" (some skipped)" if any(
-                      r[0] == "SKIP" for r in results) else ""))
+            print(f"  {mark} {name}: {ran - bad}/{ran} checks passed"
+                  + (f", {skipped} skipped" if skipped else ""))
             for status, check, detail in results:
                 if status == "FAIL":
                     print(f"         FAIL {check}: {detail}")

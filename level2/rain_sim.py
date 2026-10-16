@@ -491,16 +491,7 @@ def memory_estimate(dom, effective_res):
     return cells / 1e6, cells * 120e-9
 
 
-def _world_matrix(obj):
-    """World matrix from the object's CURRENT loc/rot/scale.
-
-    obj.matrix_world is only refreshed by the next depsgraph update, so
-    right after apply_area() rescales the emitter it still holds the old
-    size; build the matrix from matrix_basis instead (parent-aware)."""
-    mw = obj.matrix_basis.copy()
-    if obj.parent is not None:
-        mw = obj.parent.matrix_world @ obj.matrix_parent_inverse @ mw
-    return mw
+_world_matrix = sw.world_matrix
 
 
 def emitter_footprint(emitter):
