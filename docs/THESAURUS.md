@@ -6,10 +6,15 @@ before introducing it anywhere else.
 
 | Term | Definition | Notes |
 | ---- | ---------- | ----- |
+| Add-on version | The AquaSuite release that created a setup, e.g. `1.0.0`; read from `blender_manifest.toml` and stored on each assembly entry. | For bug reports; upgrade decisions use the data version. |
 | Assembly | Everything one Create button builds: objects, meshes, node groups, particle settings, materials and collections, tracked as one unit. | Deleted as one unit by Delete Assembly. Users may rename every part. |
 | Assembly entry | The registry record for one assembly in `Scene.aqs_assemblies` (`AQS_AssemblyEntry`): uuid, mode, primary object, root collection and per-mode settings. | Python references to entries go stale after any entry is removed; hold the uuid instead. |
 | Base resolution | The user-chosen voxel resolution of a liquid assembly (`base_resolution`). | Draft halves it to get the effective resolution. |
+| Beta mode | Still Water, Water Hose and Rain Simulation: fully usable but bake-bound, slow and RAM-heavy at high resolution. | Labelled Beta in the panel; explained once per mode. |
+| Bug report | Text copied by Copy Report: versions, OS, mode, plain message and traceback, with home folder and .blend path/name removed. | Pasted into public GitHub issues. |
 | Buoy (floater) | A user object made to bob and tilt on an ocean through constraints to an AquaSuite empty driven by the buoy handler. | Deterministic: a pure function of position and time. |
+| Data version | Integer on each assembly entry recording its saved-data layout: 0 = pre-release, 1 from 1.0. | Changes only when a mode's saved layout changes. |
+| Deferred popup | The error popup for failures in sliders, the buoy handler or panel drawing, shown later by a timer. | Never during playback, rendering or headless runs. |
 | Delete Assembly | Teardown that restores tracked changes to user objects, releases effectors, then removes every ID carrying the assembly's owner tag. | Optionally removes the bake cache folder. |
 | Domain | The Mantaflow fluid domain object of a liquid assembly. | Unrotated box; size it via `object_dims`, not `dimensions`. |
 | Draft | Liquid quality switch: half resolution, 1× mesh, no secondary particles. | Hose and Rain Simulation. |
@@ -22,6 +27,7 @@ before introducing it anywhere else.
 | Mode | The kind of assembly: Plane Ocean, Plane Rain, Reactive Rain, Snow Plane, Still Water, Rain Simulation, Water Hose. | `MODE_*` constants. |
 | Owner tag | The `aqs_owner` custom property `"<mode>:<uuid>"` on every ID an assembly created. | The only basis for deletion; never names. |
 | Pool source | A user mesh added to a Rain Simulation as pool water. | Hidden, never converted, restored on delete. |
+| Pre-release setup | An assembly with data version 0 (made before 1.0). | Shows a notice; no compatibility promise. |
 | Quality tier | Scene-wide Preview/Final switch that lowers particle display and ocean resolution non-destructively. | |
 | Rain drops object | The rendered Rain Simulation rain: the full drop field at Drop Size, child of the emitter. | Unselectable. |
 | Regime | The Water Hose flow type: Normal, Mist, Spray, Water Blast. | |

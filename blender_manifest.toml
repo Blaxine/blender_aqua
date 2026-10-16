@@ -37,4 +37,8 @@ paths_exclude_pattern = [
   "/requirements/",
   "/tests/",
   "/aquasuite_cache/",
+  "/public_repo/",
+  "/docs/TESTING.md",
+  "/docs/THESAURUS.md",
+  "/docs/RELEASE_CHECKLIST.md",
 ]

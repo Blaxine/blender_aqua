@@ -13,8 +13,10 @@ import aqs_testlib as lib  # noqa: E402
 
 import bpy  # noqa: E402
 
-FORBIDDEN = ("requirements/", "tests/", ".git", "__pycache__", "aquasuite_cache")
-REQUIRED = ("__init__.py", "blender_manifest.toml", "constants.py", "core/errors.py",
+FORBIDDEN = ("requirements/", "tests/", ".git", "__pycache__", "aquasuite_cache",
+             "public_repo/", "docs/TESTING.md", "docs/THESAURUS.md",
+             "docs/RELEASE_CHECKLIST.md")
+REQUIRED = ("__init__.py", "README.md", "docs/TROUBLESHOOTING.md", "blender_manifest.toml", "constants.py", "core/errors.py",
             "core/registry.py", "level2/rain_sim.py", "ui/panel.py", "ui/beta.py")
 
 LOAD_SCRIPT = r'''

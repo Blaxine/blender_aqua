@@ -130,41 +130,49 @@ during a bake. If Blender's memory climbs into swap during a big
 final bake, cancel (Esc), lower Resolution one notch, and re-bake —
 liquid at 200+ resolution can genuinely need many GB of RAM.
 
-## Build status — read this once
+## What's in this version
 
-This is **v0.14.0**, an implementation preview of the AquaSuite v1.0
-technical design (TDD + Revision R1). Implemented and functional:
+- All seven modes create, play and delete cleanly; every setup records
+  the version that made it, and updates never change existing setups.
+- Deterministic buoys: floating objects ride the ocean with no bake and
+  give identical results on render farms.
+- Programmatic 5-layer Gerstner ocean (fully inspectable node tree).
+- Rain, Reactive Rain and Snow: real-time, with streaks that follow the
+  direction of fall.
+- Rain Sim: thin rendered raindrops fall the whole way; the liquid
+  simulation only handles the splashes and ripples where they land.
+- Water Hose: aimable nozzle, four regimes, Fit Domain shrink-wraps the
+  jet's path (refits when Range or Spread changes; click it after
+  re-aiming).
+- If anything fails, a popup explains it in plain words and **Copy
+  Report** puts a ready-to-paste bug report on your clipboard (personal
+  paths removed).
 
-- All seven modes create, play, and delete cleanly
-- UUID ownership, reversible deletion with restore records
-- Deterministic closed-form buoys (stateless FIR smoothing — identical
-  results on isolated farm frames and sequential playback)
-- Programmatic 5-layer Gerstner GN ocean (fully inspectable node tree)
-- Procedural 7-shape snow collection (ball + 6 dendrite flake types)
-- Reactive Rain with anti-tunneling canvas substeps
-- Refcounted, conflict-safe Mantaflow effectors
-- R1-corrected hose velocity clamp (with the fix suggestion in the
-  warning and a persistent panel notice)
-- Hose **Fit Domain**: the domain shrink-wraps the jet's path; it refits
-  automatically when Range or Spread changes (re-click after re-aiming)
-- Rain Sim: thin rendered raindrops (2.5 mm default) fall the whole
-  way; each drop is injected into the liquid simulation only in the
-  frame before it hits the water, at its impact velocity, so the
-  solver simulates just the splashes and ripples — in a domain fitted
-  to the water, not the fall column. Rain Sims made with v0.13.4 or
-  older: click **Rebuild Emitter**
-- Preview/Final tier for particles + ocean resolution
+## Beta modes
 
-Not yet in this build (tracked for 1.0 final):
+**Still Water, Water Hose and Rain Sim are Beta.** They run Blender's
+Mantaflow liquid solver, so they must be baked, bakes slow down and use
+a lot of RAM as Resolution rises, and Draft (fast) results are coarse.
+They're fully usable — just plan bake time into your shot. A short note
+explains this the first time you create each one; *Preferences → Add-ons
+→ AquaSuite → Show Beta Notes Again* brings it back.
 
-- **Ocean wake solver** (interactive ripple height-field layered on the
-  swell) and buoy *Wake Reaction* — buoys currently ride the swell only
-- GN sim-zone / ocean bake operator (unneeded until the wake ships —
-  default buoys are already farm-safe without a bake)
-- Hose domain refit on *aim* change (keyframed nozzles: click Fit
-  Domain at the widest aim, or scale the domain manually)
-- Wetness darkening map on the Reactive Rain floor
-- Preset engine, addon preferences, headless pytest harness
+## Roadmap
+
+Planned for future free 1.x updates, in no fixed order and without dates:
+
+- **Ocean wake**: interactive ripples behind moving objects, with buoys
+  reacting to them.
+- Hose domain refit when the nozzle is re-aimed (today: click Fit Domain
+  at the widest aim).
+- A wetness effect on the Reactive Rain floor.
+- One-click presets (drizzle, storm, calm sea, …).
+
+## Support
+
+Found a bug or have a question? Open an issue at
+**https://github.com/Blaxine/aquasuite/issues** — paste the text from
+**Copy Report** if AquaSuite showed an error. Support is best-effort.
 
 Field names in the Blender Python API occasionally shift between
 versions; AquaSuite sets solver fields defensively and logs anything it
