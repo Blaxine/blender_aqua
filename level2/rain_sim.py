@@ -269,9 +269,23 @@ def _drop_tree(uid, droplet_mat):
     ico.inputs["Subdivisions"].default_value = 1
     nt.links.new(gin.outputs["Drop Size"], ico.inputs["Radius"])
 
+    # Streak along the drop's CURRENT velocity (v - g*dt along Z): the
+    # instance's local Z is aligned to it, then Scale Instances stretches
+    # local Z.  Align Euler to Vector exists in 4.1 through 5.x.
+    g_dt = m("MULTIPLY", a=gin.outputs["Gravity"], b=dt.outputs[0])
+    vz_now = m("SUBTRACT", a=gin.outputs["Vz"], b=g_dt.outputs[0])
+    vel = nt.nodes.new("ShaderNodeCombineXYZ")
+    nt.links.new(gin.outputs["Vx"], vel.inputs["X"])
+    nt.links.new(gin.outputs["Vy"], vel.inputs["Y"])
+    nt.links.new(vz_now.outputs[0], vel.inputs["Z"])
+    align = nt.nodes.new("FunctionNodeAlignEulerToVector")
+    align.axis = "Z"
+    nt.links.new(vel.outputs[0], align.inputs["Vector"])
+
     inst = nt.nodes.new("GeometryNodeInstanceOnPoints")
     nt.links.new(keep.outputs["Geometry"], inst.inputs["Points"])
     nt.links.new(ico.outputs["Mesh"], inst.inputs["Instance"])
+    nt.links.new(align.outputs[0], inst.inputs["Rotation"])
 
     scale = nt.nodes.new("GeometryNodeScaleInstances")
     scale.inputs["Scale"].default_value = (1.0, 1.0, 1.9)  # streak shape
