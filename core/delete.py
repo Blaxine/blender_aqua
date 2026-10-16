@@ -200,6 +200,7 @@ def guarded_create(execute):
     def wrapper(self, context):
         before = _owner_uuids()
         from . import errors
+        count = len(context.scene.aqs_assemblies)
         try:
             result = execute(self, context)
         except Exception as exc:
@@ -207,5 +208,8 @@ def guarded_create(execute):
         if "CANCELLED" in result:
             for u in _owner_uuids() - before:
                 delete_assembly(context.scene, u)
+        elif len(context.scene.aqs_assemblies) > count:
+            from ..ui import beta
+            beta.notify_created(context.scene.aqs_assemblies[-1].mode)
         return result
     return wrapper

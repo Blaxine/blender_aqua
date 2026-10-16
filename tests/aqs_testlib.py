@@ -50,6 +50,8 @@ def _load_addon():
     mod = importlib.util.module_from_spec(spec)
     sys.modules["aquasuite"] = mod
     spec.loader.exec_module(mod)
+    # What enabling the add-on does, so AddonPreferences are available.
+    bpy.context.preferences.addons.new().module = "aquasuite"
     mod.register()
     return mod
 

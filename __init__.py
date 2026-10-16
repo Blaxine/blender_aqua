@@ -17,11 +17,11 @@ from .core import registry, handlers, quality, errors
 from .level1 import ocean, rain, rain_reactive, snow
 from .level2 import still_water, rain_sim
 from .level3 import hose
-from .ui import panel
+from .ui import panel, beta
 
 
 _MODULES = (errors, ocean, rain, rain_reactive, snow, still_water, rain_sim,
-            hose, panel)
+            hose, panel, beta)
 
 
 def _all_classes():

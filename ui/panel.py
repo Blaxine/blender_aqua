@@ -5,6 +5,7 @@ import bpy
 
 from .. import constants as C
 from ..core import registry, delete, errors
+from . import beta
 from ..level1 import ocean as ocean_mod
 
 
@@ -338,10 +339,11 @@ class AQS_PT_water(bpy.types.Panel):
         row.operator("aquasuite.rain_reactive_create", text="Reactive Rain")
         row.operator("aquasuite.snow_create", text="Snow")
         row = create.row(align=True)
-        row.operator("aquasuite.still_water_create", text="Still Water (active mesh)")
+        row.operator("aquasuite.still_water_create",
+                     text="Still Water (active mesh) · Beta")
         row = create.row(align=True)
-        row.operator("aquasuite.hose_create", text="Water Hose")
-        row.operator("aquasuite.rain_sim_create", text="Rain Sim",
+        row.operator("aquasuite.hose_create", text="Water Hose · Beta")
+        row.operator("aquasuite.rain_sim_create", text="Rain Sim · Beta",
                      icon=C.MODE_ICONS[C.MODE_SIMRAIN])
 
         entries = registry.entries(scene)
@@ -355,6 +357,8 @@ class AQS_PT_water(bpy.types.Panel):
             header = box.row(align=True)
             header.label(text=C.MODE_LABELS.get(entry.mode, entry.mode),
                          icon=C.MODE_ICONS.get(entry.mode, "QUESTION"))
+            if beta.is_beta(entry.mode):
+                header.label(text="Beta", icon="EXPERIMENTAL")
             header.label(text=f"AQS_A_{entry.uuid[:8]}")
             op = header.operator("aquasuite.assembly_delete", text="", icon="TRASH")
             op.uuid = entry.uuid
