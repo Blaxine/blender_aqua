@@ -32,6 +32,7 @@ Version under test: `________`  Date: `________`
 - [ ] Water obstacles row (＋ / −): add a cube from each liquid box; remove it, or unlink it in the Outliner — its added modifiers disappear, your own Collision stays
 - [ ] Rain Sim (Beta): Beta note on first create; add a pool mesh; bake — splashes and ripples in the pool; rendered drops are thin and end at the water
 - [ ] Rain Sim at Angle 45°: streaks lean along the direction of fall
+- [ ] Rain Sim without a pool, Draft, 48 frames: splashes appear but the domain floor does not fill up; Splash Amount 0% = no splashes, 100% = visibly faster filling
 - [ ] Start a liquid bake at High resolution: the panel shows "Baking…" with **Cancel Bake**; Cancel stops it within a few seconds, Blender stays responsive, frames baked so far still play; Free Bake removes them
 - [ ] Start a liquid bake and press **Esc**: it stops the same way
 - [ ] Bake buttons: **red** "Bake (required)" before baking with the trash button red and greyed out; after baking (or a cancelled part-bake) **blue** "Bake Again" with the trash button red and clickable; Free Bake turns them back. Bake Ripples: red before, blue after

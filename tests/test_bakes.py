@@ -80,6 +80,7 @@ def test_bakes():
     bpy.ops.object.transform_apply(scale=True)
     lib.make_active(pool)
     bpy.ops.aquasuite.rain_sim_add_pool(uuid=u)
+    lib.entry(u).splash_amount = 1.0          # every drop, to measure positions
     lib.scene().frame_set(10)
     bpy.context.view_layer.update()
     em = rain_sim.find_emitter(lib.entry(u))
@@ -93,6 +94,7 @@ def test_bakes():
               f"drop z {min(low):.2f}..{max(low):.2f}, water {level:.2f}" if low else "no drops")
     # liquid touching the domain walls has an open surface, so measured
     # volume under-reads; the check only separates "real liquid" from empty
+    lib.entry(u).splash_amount = 0.1
     _report("Rain Sim (pool)", _bake(u), 0.1)
 
 

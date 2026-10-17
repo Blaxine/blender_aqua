@@ -143,6 +143,8 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
   direction of fall.
 - Rain Sim: thin rendered raindrops fall the whole way; the liquid
   simulation only handles the splashes and ripples where they land.
+  **Splash Amount** (default 10%) sets how many drops splash, so the
+  pool doesn't fill up with simulated water.
 - Water Hose: an aimable, keyframable nozzle with four real-time
   regimes — a thin Normal stream, a broken-up Spray, a fast Water Blast
   and Mist — that hit Water Obstacles and splash along them; Water Color

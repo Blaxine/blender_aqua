@@ -251,6 +251,7 @@ def _draw_rain_sim(box, entry, context):
         drops.label(text="Drops", icon="MOD_FLUIDSIM")
         drops.prop(entry, "rain_density")
         drops.prop(entry, "drop_size")
+        drops.prop(entry, "splash_amount")
         drops.prop(entry, "rain_seed")
 
     if gnmod is None or legacy:

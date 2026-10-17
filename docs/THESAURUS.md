@@ -35,6 +35,7 @@ before introducing it anywhere else.
 | Restore record | Saved pre-state of a user object AquaSuite changed (visibility, display type, constraints). | Applied by Delete Assembly. |
 | Simulate Liquid | Per-hose Beta toggle that swaps the jet for a baked Mantaflow liquid. | Thicker than a real jet; needs a bake. |
 | Source marker | The `aqs_source_of` property marking a user mesh used as a liquid source. | Deliberately not the owner tag. |
+| Splash Amount | Share of Rain Simulation drops injected into the liquid at impact (default 10%). | Every drop still renders; each injected blob carries far more water than a real drop. |
 | Water Color | Per-hose tint of the jet droplets, mist and simulated liquid. | |
 | Water level | Where Rain Simulation rain meets water: top of the highest pool source, or z = 0 without pools. | |
 | Water Obstacles | The scene's `AQS Water Obstacles` collection: the only rule for what blocks water in every simulation. | AquaSuite adds Collision/Effector as needed and removes exactly that when an object leaves the collection. |

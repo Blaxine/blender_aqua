@@ -199,6 +199,13 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
         description="Radius of the rendered raindrops (real rain: 1-3 mm). "
                     "The splash liquid injected at impact is never smaller "
                     "than ~1 voxel, or the solver can't see it")
+    splash_amount: FloatProperty(
+        name="Splash Amount", default=0.1, min=0.0, max=1.0,
+        subtype="FACTOR", update=_rain_params_update,
+        description="Share of raindrops that splash into the simulated "
+                    "water. Every drop still renders; each splash is a "
+                    "grid-sized blob carrying far more water than a real "
+                    "drop, so higher values fill the domain faster")
     rain_seed: IntProperty(
         name="Seed", default=0, min=0, update=_rain_params_update,
         description="Random layout of the drops")

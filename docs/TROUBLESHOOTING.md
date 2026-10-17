@@ -36,6 +36,13 @@
   Obstacles; for baked liquid it also needs a thickness comparable to
   one voxel — raise the domain Resolution or thicken the floor.
 
+- **“Rain Sim fills up with giant water drops”** — every drop that
+  splashes is injected as a blob at least one grid cell big (about 10 cm
+  at Draft), which holds far more water than a real raindrop. Lower
+  **Splash Amount** (Drops section) so fewer drops splash — every drop
+  still renders — or raise Resolution so each blob is smaller. Older Rain
+  Sims show "Old rain emitter — Rebuild": click it to get Splash Amount.
+
 - **“The hose looks like a thick tube”** — that's *Simulate Liquid*
   (Beta): a liquid grid can't resolve a centimetre-wide stream. Turn it
   off for the thin real-time jet; turn on Motion Blur in render

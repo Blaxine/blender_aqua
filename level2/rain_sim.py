@@ -185,7 +185,8 @@ def _drop_tree(uid, droplet_mat):
             ("Seed", "NodeSocketInt", 0),
             ("Emit Only", "NodeSocketBool", False),
             ("Emit Start", "NodeSocketFloat", 0.0),
-            ("Emit Window", "NodeSocketFloat", 1.0 / 24.0)):
+            ("Emit Window", "NodeSocketFloat", 1.0 / 24.0),
+            ("Splash Fraction", "NodeSocketFloat", 1.0)):
         sock = iface.new_socket(name, in_out="INPUT", socket_type=stype)
         sock.default_value = default
 
@@ -256,10 +257,27 @@ def _drop_tree(uid, droplet_mat):
     outside.operation = "OR"
     nt.links.new(early.outputs[0], outside.inputs[0])
     nt.links.new(late.outputs[0], outside.inputs[1])
+    # Splash Fraction: only that share of drops is injected.  Each grid
+    # blob carries far more water than a real raindrop, so injecting every
+    # drop fills the domain.  An independent random value per point picks
+    # the splashing drops (stable per drop: same seed + index each frame).
+    seed2 = m("ADD", a=gin.outputs["Seed"], v1=7919.0)
+    pick = nt.nodes.new("FunctionNodeRandomValue")
+    pick.data_type = "FLOAT"
+    nt.links.new(seed2.outputs[0], pick.inputs["Seed"])
+    skip = nt.nodes.new("FunctionNodeCompare")
+    skip.data_type = "FLOAT"
+    skip.operation = "GREATER_EQUAL"
+    nt.links.new(pick.outputs[1], skip.inputs[0])
+    nt.links.new(gin.outputs["Splash Fraction"], skip.inputs[1])
+    unwanted = nt.nodes.new("FunctionNodeBooleanMath")
+    unwanted.operation = "OR"
+    nt.links.new(outside.outputs[0], unwanted.inputs[0])
+    nt.links.new(skip.outputs[0], unwanted.inputs[1])
     cull = nt.nodes.new("FunctionNodeBooleanMath")
     cull.operation = "AND"
     nt.links.new(gin.outputs["Emit Only"], cull.inputs[0])
-    nt.links.new(outside.outputs[0], cull.inputs[1])
+    nt.links.new(unwanted.outputs[0], cull.inputs[1])
     keep = nt.nodes.new("GeometryNodeDeleteGeometry")
     keep.domain = "POINT"
     nt.links.new(setpos.outputs["Geometry"], keep.inputs["Geometry"])
@@ -288,7 +306,9 @@ def _drop_tree(uid, droplet_mat):
     nt.links.new(align.outputs[0], inst.inputs["Rotation"])
 
     scale = nt.nodes.new("GeometryNodeScaleInstances")
-    scale.inputs["Scale"].default_value = (1.0, 1.0, 1.9)  # streak shape
+    # Streak shape.  The emitter's blobs keep it too: a round blob of
+    # 0.75 cells is below what Mantaflow registers; the stretched one isn't.
+    scale.inputs["Scale"].default_value = (1.0, 1.0, 1.9)
     nt.links.new(inst.outputs["Instances"], scale.inputs["Instances"])
 
     real = nt.nodes.new("GeometryNodeRealizeInstances")
@@ -343,8 +363,9 @@ def emission_radius(entry):
 
 
 def is_legacy_tree(mod):
-    """Drop trees from before impact emission (v0.13.4 and older)."""
-    return gn_io._socket_identifier(mod, "Emit Start") is None
+    """Drop trees older than the current emitter (v0.16.0 and before:
+    every drop injected as a stretched blob, filling the domain)."""
+    return gn_io._socket_identifier(mod, "Splash Fraction") is None
 
 
 def rain_timing(entry, scene):
@@ -397,6 +418,8 @@ def apply_rain_params(context, entry):
         # The frame before impact: the solver only ever sees splashes.
         gn_io.set_input(mod, "Emit Start", float(max(t_fall - window, 0.0)))
         gn_io.set_input(mod, "Emit Window", float(window))
+        gn_io.set_input(mod, "Splash Fraction",
+                        float(entry.splash_amount) if emit else 1.0)
         size = emission_radius(entry) if (emit and not legacy) \
             else entry.drop_size
         gn_io.set_input(mod, "Drop Size", float(size))

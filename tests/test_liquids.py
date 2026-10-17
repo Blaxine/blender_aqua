@@ -115,6 +115,32 @@ def test_hose_aim_consistent_at_creation():
               f"domain z {dmin.z:.2f}..{dmax.z:.2f}")
 
 
+def _injected_drops(u, frames=range(1, 25)):
+    em = rain_sim.find_emitter(lib.entry(u))
+    total = 0
+    for f in frames:
+        lib.scene().frame_set(f)
+        dg = bpy.context.evaluated_depsgraph_get()
+        total += max(len(em.evaluated_get(dg).data.vertices) - 4, 0) // 12
+    return total
+
+
+def test_splash_amount():
+    u = U["rs"]
+    lib.check("Splash Amount defaults to 10%",
+              abs(lib.entry(u).splash_amount - 0.1) < 1e-6)
+    lib.entry(u).splash_amount = 1.0
+    every = _injected_drops(u)
+    lib.entry(u).splash_amount = 0.1
+    tenth = _injected_drops(u)
+    lib.entry(u).splash_amount = 0.0
+    none = _injected_drops(u)
+    lib.entry(u).splash_amount = 0.1
+    lib.check("Splash Amount scales the injected drops (0% = none)",
+              every > 50 and none == 0 and 0.03 < tenth / every < 0.25,
+              f"100%: {every}, 10%: {tenth}, 0%: {none}")
+
+
 def test_memory_guard():
     e = lib.entry(U["still"])
     e.base_resolution = 512
