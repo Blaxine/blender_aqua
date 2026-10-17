@@ -44,6 +44,16 @@ def is_baking(entry):
     return bool(ds and ds.is_cache_baking_any)
 
 
+def has_bake(entry):
+    """True when the setup has baked frames on disk (complete or stopped
+    part-way)."""
+    if entry.mode == C.MODE_RRAIN:
+        pc = ripple_cache(entry)
+        return bool(pc and pc.is_baked)
+    _dom, ds = fluid_settings(entry)
+    return bool(ds and ds.has_cache_baked_any)
+
+
 def any_baking():
     for scene in bpy.data.scenes:
         for entry in getattr(scene, "aqs_assemblies", []):

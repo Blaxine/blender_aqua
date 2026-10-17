@@ -36,6 +36,9 @@ def test_idle_is_not_baking():
     baking = {k: bakes.is_baking(lib.entry(u)) for k, u in U.items()}
     lib.check("nothing reports baking when idle", not any(baking.values()), str(baking))
     lib.check("no AquaSuite bake running", not bakes.any_baking())
+    baked = {k: bakes.has_bake(lib.entry(u)) for k, u in U.items()}
+    lib.check("new setups have no bake (red Bake, Free greyed out)",
+              not any(baked.values()), str(baked))
 
 
 def test_cancel_when_idle_is_harmless():
@@ -55,6 +58,8 @@ def test_ripple_bake_completes_headless():
     r = bpy.ops.aquasuite.bake_ripples(uuid=U["rr"])
     lib.check("ripple bake finishes headless (blocking)",
               r == {"FINISHED"} and pc.is_baked and not pc.is_baking, str(r))
+    lib.check("baked ripples report a bake (blue Bake Again)",
+              bakes.has_bake(lib.entry(U["rr"])))
 
 
 lib.main(globals())

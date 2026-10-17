@@ -214,13 +214,24 @@ def _draw_bake(box, entry, op_bake, op_free=None, mandatory=True):
             op = row.operator("aquasuite.cancel_bake", icon="CANCEL")
             op.uuid = entry.uuid
         return
+    # Not baked: red Bake.  Baked: blue (pressed-style) Bake Again.
+    # Free Bake: red, greyed out while there is nothing to free.
+    baked = bakes.has_bake(entry)
     row = box.row(align=True)
-    row.alert = mandatory
-    op = row.operator(op_bake, icon="RENDER_ANIMATION",
-                      text="Bake (required)" if mandatory else "Bake")
+    sub = row.row(align=True)
+    sub.alert = not baked
+    if baked:
+        text = "Bake Again"
+    else:
+        text = "Bake (required)" if mandatory else "Bake"
+    op = sub.operator(op_bake, icon="RENDER_ANIMATION", text=text,
+                      depress=baked)
     op.uuid = entry.uuid
     if op_free:
-        op = row.operator(op_free, text="", icon="TRASH")
+        sub = row.row(align=True)
+        sub.alert = True
+        sub.enabled = baked
+        op = sub.operator(op_free, text="", icon="TRASH")
         op.uuid = entry.uuid
 
 

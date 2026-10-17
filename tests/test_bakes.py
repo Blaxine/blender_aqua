@@ -61,7 +61,11 @@ def test_bakes():
     bpy.ops.aquasuite.still_water_create()
     u = lib.last_uuid()
     lib.entry(u).base_resolution = 32
+    from aquasuite.core import bakes
+    before = bakes.has_bake(lib.entry(u))
     _report("Still Water", _bake(u), 0.05)
+    lib.check("liquid bake state: none before, baked after (button red -> blue)",
+              not before and bakes.has_bake(lib.entry(u)))
 
     bpy.ops.aquasuite.hose_create()
     u = lib.last_uuid()

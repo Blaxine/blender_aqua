@@ -31,6 +31,7 @@ Version under test: `________`  Date: `________`
 - [ ] Rain Sim at Angle 45°: streaks lean along the direction of fall
 - [ ] Start a liquid bake at High resolution: the panel shows "Baking…" with **Cancel Bake**; Cancel stops it within a few seconds, Blender stays responsive, frames baked so far still play; Free Bake removes them
 - [ ] Start a liquid bake and press **Esc**: it stops the same way
+- [ ] Bake buttons: **red** "Bake (required)" before baking with the trash button red and greyed out; after baking (or a cancelled part-bake) **blue** "Bake Again" with the trash button red and clickable; Free Bake turns them back. Bake Ripples: red before, blue after
 - [ ] Reactive Rain → Bake Ripples: progress bar in the status bar, Blender stays responsive, the panel says "press Esc to stop", and Esc stops it
 - [ ] Delete every setup: the scene is back to its previous state
 
