@@ -29,6 +29,9 @@ Version under test: `________`  Date: `________`
 - [ ] Water Hose (Beta): Beta note on first create; jet fires **along the nozzle's aim**; Normal bake shows a stream; switch to Mist — mist cone along the aim
 - [ ] Rain Sim (Beta): Beta note on first create; add a pool mesh; bake — splashes and ripples in the pool; rendered drops are thin and end at the water
 - [ ] Rain Sim at Angle 45°: streaks lean along the direction of fall
+- [ ] Start a liquid bake at High resolution: the panel shows "Baking…" with **Cancel Bake**; Cancel stops it within a few seconds, Blender stays responsive, frames baked so far still play; Free Bake removes them
+- [ ] Start a liquid bake and press **Esc**: it stops the same way
+- [ ] Reactive Rain → Bake Ripples: progress bar in the status bar, Blender stays responsive, the panel says "press Esc to stop", and Esc stops it
 - [ ] Delete every setup: the scene is back to its previous state
 
 ## 4. Compatibility

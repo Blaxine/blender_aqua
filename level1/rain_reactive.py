@@ -163,12 +163,22 @@ class AQS_OT_bake_ripples(bpy.types.Operator):
         try:
             with context.temp_override(active_object=floor, object=floor,
                                        point_cache=surf.point_cache):
-                bpy.ops.ptcache.bake(bake=True)
+                # A background job (progress bar, Esc stops it); blocking
+                # only when headless.
+                bpy.ops.ptcache.bake(
+                    "EXEC_DEFAULT" if bpy.app.background else "INVOKE_DEFAULT",
+                    bake=True)
         except Exception as exc:
             from ..core import errors
             return errors.fail(self, "AquaSuite couldn't bake the ripples", exc,
                                mode=C.MODE_RRAIN, uuid=self.uuid)
-        self.report({"INFO"}, "Ripples baked")
+        if bpy.app.background:
+            self.report({"INFO"}, "Ripples baked")
+        else:
+            from ..core import bakes
+            bakes.watch()
+            self.report({"INFO"}, "Baking ripples in the background — "
+                                  "press Esc to stop")
         return {"FINISHED"}
 
 

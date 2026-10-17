@@ -462,7 +462,9 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
                 # stays responsive, a progress bar appears, and Esc cancels.
                 # (A blocking bake looks exactly like a crash — it isn't,
                 # but an animator shouldn't have to know that.)
-                bpy.ops.fluid.bake_all("INVOKE_DEFAULT")
+                # Headless (render farms, scripts): a blocking bake.
+                bpy.ops.fluid.bake_all(
+                    "EXEC_DEFAULT" if bpy.app.background else "INVOKE_DEFAULT")
         except Exception as exc:
             from ..core import errors
             return errors.fail(self, "AquaSuite couldn't start the bake", exc,
@@ -470,9 +472,11 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
         finally:
             if was_hidden:
                 dom.hide_set(True)
+        from ..core import bakes
+        bakes.watch()
         self.report({"INFO"},
-                    "Baking in the background — progress bar at the bottom, "
-                    "press Esc to cancel")
+                    "Baking in the background — Cancel Bake in the panel "
+                    "(or Esc) stops it")
         return {"FINISHED"}
 
 

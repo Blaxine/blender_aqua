@@ -13,14 +13,14 @@ import bpy
 from bpy.props import CollectionProperty, EnumProperty
 
 from . import constants as C
-from .core import registry, handlers, quality, errors
+from .core import registry, handlers, quality, errors, bakes
 from .level1 import ocean, rain, rain_reactive, snow
 from .level2 import still_water, rain_sim
 from .level3 import hose
 from .ui import panel, beta
 
 
-_MODULES = (errors, ocean, rain, rain_reactive, snow, still_water, rain_sim,
+_MODULES = (errors, bakes, ocean, rain, rain_reactive, snow, still_water, rain_sim,
             hose, panel, beta)
 
 
@@ -57,6 +57,7 @@ def register():
 def unregister():
     handlers.unregister()
     errors.unregister()
+    bakes.unregister()
 
     del bpy.types.Scene.aqs_quality
     del bpy.types.Scene.aqs_assemblies

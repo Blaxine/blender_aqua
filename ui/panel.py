@@ -4,7 +4,7 @@
 import bpy
 
 from .. import constants as C
-from ..core import registry, delete, errors
+from ..core import registry, delete, errors, bakes
 from . import beta
 from ..level1 import ocean as ocean_mod
 
@@ -205,6 +205,15 @@ def _draw_fluid_settings(box, entry):
 
 
 def _draw_bake(box, entry, op_bake, op_free=None, mandatory=True):
+    if bakes.is_baking(entry):
+        row = box.row(align=True)
+        if entry.mode == C.MODE_RRAIN:
+            row.label(text="Baking ripples — press Esc to stop", icon="TIME")
+        else:
+            row.label(text="Baking…", icon="TIME")
+            op = row.operator("aquasuite.cancel_bake", icon="CANCEL")
+            op.uuid = entry.uuid
+        return
     row = box.row(align=True)
     row.alert = mandatory
     op = row.operator(op_bake, icon="RENDER_ANIMATION",
