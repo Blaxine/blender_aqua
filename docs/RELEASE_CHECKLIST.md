@@ -1,14 +1,14 @@
 # Release checklist
 
-Run this for every release, on **Blender 4.2** and on the **latest 5.x**.
-Nothing ships until every box is ticked on both. (Internal document — not
+Run this for every release in **Blender 5.1** (the release-test version).
+Nothing ships until every box is ticked. (Internal document — not
 included in the extension zip.)
 
 Version under test: `________`  Date: `________`
 
 ## 1. Automated suite
 
-- [ ] `tests/blender_paths.local.json` lists Blender 4.2 and the latest 5.x
+- [ ] `tests/blender_paths.local.json` lists Blender 5.1 (and 4.1 as an older-version check)
 - [ ] `python tests/run_tests.py --bake` → **0 failed** (copy the summary line here)
 - [ ] The version in `blender_manifest.toml` is the version being released
 
@@ -19,7 +19,7 @@ Version under test: `________`  Date: `________`
 - [ ] AquaSuite is enabled; the **Water** tab appears in the 3D Viewport N-panel
 - [ ] Preferences → Add-ons → AquaSuite: the website link opens github.com/Blaxine/aquasuite
 
-## 3. Every mode (4.2 and 5.x)
+## 3. Every mode (Blender 5.1)
 
 - [ ] Ocean: create, attach a floater (cube), play — it bobs and tilts; delete restores the cube
 - [ ] Rain: create, play — streaks point along the fall, also with wind (particle Object Align X)

@@ -13,13 +13,14 @@ Copy `tests/blender_paths.example.json` to `tests/blender_paths.local.json`
 ```json
 {
   "blenders": [
-    {"name": "4.2", "path": "C:/Program Files/Blender Foundation/Blender 4.2/blender.exe"},
-    {"name": "5.1", "path": "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"}
+    {"name": "5.1", "path": "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"},
+    {"name": "4.1", "path": "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe"}
   ]
 }
 ```
 
-Supported releases are Blender 4.2 and newer: list 4.2 and the latest 5.x.
+Release testing uses Blender 5.1. Keep an older Blender (4.1) listed too: the
+automated suite is the only check on older versions.
 
 ## Running
 
