@@ -15,6 +15,7 @@ from bpy.props import (
 
 from .. import constants as C
 from . import errors
+from . import presets
 
 
 class AQS_PoolSourceEntry(bpy.types.PropertyGroup):
@@ -48,12 +49,17 @@ def _resolution_update(self, context):
     clamp) so nothing clobbers the user's choice.  STILL: write straight
     to the domain settings.
     """
+    if presets.busy(self):
+        return
     if self.mode == "HOSE":
         from ..level3 import hose
         hose.apply_regime(context, self)
     elif self.mode == "SIMRAIN":
         from ..level2 import rain_sim
         rain_sim.apply_quality(context, self)
+    elif self.mode == C.MODE_SIMOCEAN:
+        from ..level2 import simulated_ocean
+        simulated_ocean.apply_settings(context, self)
     elif self.mode == "STILL":
         from ..level2 import still_water as sw
         dom = sw.find_domain_object(self)
@@ -61,32 +67,42 @@ def _resolution_update(self, context):
             if dom else None
         ds = getattr(dmod, "domain_settings", None)
         if ds is not None:
-            ds.resolution_max = int(self.base_resolution)
+            ds.resolution_max = (max(16, self.base_resolution // 2)
+                                 if self.ww_managed and self.draft else self.base_resolution)
+    from . import whitewater
+    whitewater.apply(self)
+    presets.note_edit(self)
 
 
 @errors.guard_update("AquaSuite couldn't apply that change")
 def _rain_params_update(self, context):
+    if presets.busy(self):
+        return
     if self.mode != "SIMRAIN":
         return
     from ..level2 import rain_sim
     rain_sim.apply_rain_params(context, self)
+    presets.note_edit(self)
 
 
 @errors.guard_update("AquaSuite couldn't apply that change")
 def _rain_domain_update(self, context):
+    if presets.busy(self):
+        return
     if self.mode != "SIMRAIN":
         return
     from ..level2 import rain_sim
     rain_sim.fit_domain(context, self)
     rain_sim.apply_rain_params(context, self)
     rain_sim.apply_quality(context, self)
+    presets.note_edit(self)
 
 
 @errors.guard_update("AquaSuite couldn't apply that change")
 def _rain_area_update(self, context):
     """Rain Area resizes the emitter plane itself, then refits the domain
     around it — the slider changes where rain falls, not just the box."""
-    if self.mode != "SIMRAIN":
+    if presets.busy(self) or self.mode != "SIMRAIN":
         return
     from ..level2 import rain_sim
     rain_sim.apply_area(self)
@@ -95,10 +111,13 @@ def _rain_area_update(self, context):
 
 @errors.guard_update("AquaSuite couldn't apply that change")
 def _hose_params_update(self, context):
+    if presets.busy(self):
+        return
     if self.mode != "HOSE":
         return
     from ..level3 import hose
     hose.apply_regime(context, self)
+    presets.note_edit(self)
 
 
 @errors.guard_update("AquaSuite couldn't change the water color")
@@ -111,11 +130,35 @@ def _hose_color_update(self, context):
 
 @errors.guard_update("AquaSuite couldn't apply that change")
 def _hose_domain_update(self, context):
+    if presets.busy(self):
+        return
     if self.mode != "HOSE":
         return
     from ..level3 import hose
     hose.fit_domain(context, self)
     hose.apply_regime(context, self)
+    presets.note_edit(self)
+
+
+@errors.guard_update("AquaSuite couldn't update whitewater")
+def _whitewater_update(self, context):
+    if presets.busy(self):
+        return
+    from . import whitewater
+    # Legacy metadata is hydrated on enable/load, before users edit it.
+    self.ww_initialized = True
+    self.ww_managed = True
+    whitewater.apply(self)
+    presets.note_edit(self)
+
+
+@errors.guard_update("AquaSuite couldn't update the wave tank")
+def _tank_update(self, context):
+    if presets.busy(self) or self.mode != C.MODE_SIMOCEAN:
+        return
+    from ..level2 import simulated_ocean
+    simulated_ocean.apply_settings(context, self)
+    presets.note_edit(self)
 
 
 class AQS_AssemblyEntry(bpy.types.PropertyGroup):
@@ -128,6 +171,35 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     addon_version: StringProperty()
     primary: PointerProperty(type=bpy.types.Object)
     root_collection: PointerProperty(type=bpy.types.Collection)
+    preset_id: StringProperty(default="")
+    preset_label: StringProperty(default="")
+    preset_choice: EnumProperty(name="Preset", items=presets.preset_items)
+    preset_modified: BoolProperty(default=False)
+    preset_snapshot: StringProperty(default="")
+    ww_initialized: BoolProperty(default=False)
+    ww_managed: BoolProperty(default=False)
+    ww_warning: StringProperty(default="")
+    ww_spray: BoolProperty(name="Spray", update=_whitewater_update)
+    ww_foam: BoolProperty(name="Foam", update=_whitewater_update)
+    ww_bubbles: BoolProperty(name="Bubbles", update=_whitewater_update)
+    ww_spray_amount: FloatProperty(name="Amount", default=0.5, min=0, max=1,
+        update=_whitewater_update, description="Spray amount; re-bake to update. Zero suspends this element")
+    ww_foam_amount: FloatProperty(name="Amount", default=0.5, min=0, max=1,
+        update=_whitewater_update, description="Foam amount; re-bake to update. Zero suspends this element")
+    ww_bubbles_amount: FloatProperty(name="Amount", default=0.5, min=0, max=1,
+        update=_whitewater_update, description="Bubble amount; re-bake to update. Zero suspends this element")
+    ww_spray_size: FloatProperty(name="Size", default=0.012, min=0.0001, soft_max=0.1,
+        subtype='DISTANCE', update=_whitewater_update, description="Spray radius in metres; re-bake after changing whitewater")
+    ww_foam_size: FloatProperty(name="Size", default=0.018, min=0.0001, soft_max=0.1,
+        subtype='DISTANCE', update=_whitewater_update, description="Foam radius in metres; re-bake after changing whitewater")
+    ww_bubbles_size: FloatProperty(name="Size", default=0.009, min=0.0001, soft_max=0.1,
+        subtype='DISTANCE', update=_whitewater_update, description="Bubble radius in metres; re-bake after changing whitewater")
+    wave_height: FloatProperty(name="Wave Height", default=0.45, min=0.01, max=2.0,
+        subtype='DISTANCE', update=_tank_update, description="Paddle stroke scale; final wave height depends on depth and bake resolution")
+    wave_period: FloatProperty(name="Wave Period", default=2.4, min=0.5, max=12.0,
+        update=_tank_update, description="Seconds per paddle cycle")
+    tank_size: FloatVectorProperty(name="Tank Size", size=3, default=(20, 8, 4),
+        min=2.0, max=100.0, subtype='XYZ', update=_tank_update)
     # Still Water restore records (source visibility policy §7.1.2/7.1.3)
     source: PointerProperty(type=bpy.types.Object)
     src_hide_render: BoolProperty(default=False)

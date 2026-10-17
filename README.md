@@ -89,11 +89,54 @@ degradation* below).
   AquaSuite clamps it and tells you what to change to go further — the
   hose panel shows a red notice for as long as the jet is being slowed.
 
+## 0.17.0 preview: liquid presets and whitewater
+
+This implementation is ready for manual review; preset appearance, whitewater
+renders and wave-tank behaviour still need acceptance checks. Automated functional
+checks are deferred until after that review.
+
+Liquid Create dialogs offer editable presets. The assembly's **Preset → Apply**
+row applies another starting point later. Settings are saved in the .blend;
+future catalogue changes do not rewrite them. Editing a preset-owned value shows
+**(modified)**. Apply resets that marker. Applying a preset does not delete your
+cache files: **Bake Again** to update the result.
+
+| Mode | Presets |
+| --- | --- |
+| Still Water | Calm Pour, Splashy, Thick |
+| Rain Sim | Drizzle, Rain, Storm |
+| Hose → Simulate Liquid | Garden, Fire Hose, Sprinkler |
+| Ocean (Simulated) | Calm, Rolling Waves, Storm Surf |
+
+**Whitewater** gives Spray, Foam and Bubbles their own enable switch, Amount and
+Size in metres. Draft suspends them and keeps the checkboxes for later. Amount 0
+also suspends an element. Presets with whitewater, including Splashy and Storm
+Surf, start with Draft off. Regime changes on the hose seed whitewater defaults;
+subsequent pressure edits preserve your choices. Re-bake after changing these
+controls. Mantaflow shares spawn thresholds between elements; Amount tunes that
+shared budget and independently thins each element's rendered instances.
+
+**Set Up Render Layers** enables Material Cryptomatte and four scalar AOVs on the
+active view layer: `AQS_Liquid`, `AQS_Spray`, `AQS_Foam`, `AQS_Bubbles`. Pick the
+separate materials in a compositor Cryptomatte node, or use the AOV masks from
+Render Layers. No additional view layers are created. This action intentionally
+leaves those view-layer settings in place when an assembly is deleted.
+
+**Ocean (Simulated) · Beta** creates a closed tank, an initial water block and a
+sine-driven paddle. Wave Height controls paddle stroke; Wave Period is in seconds.
+Tank Size defaults to 20 × 8 × 4 metres. Place a rock inside the tank and add it to
+Water Obstacles, save, then bake. Draft is useful for layout; raise resolution for
+small waves. This mode does not use the procedural ocean's buoys or wake system.
+
+Existing setups initially show **Custom**. Their whitewater flags are read from
+the domain without applying a preset or modifying its solver/render setup. Edit
+Whitewater or explicitly apply a preset to adopt the new controls.
+
 ## Baking
 
 Caches are written to `//aquasuite_cache/<assembly-id>/` **next to your
 .blend** (relative paths — render-farm friendly). Unsaved files can't
-bake; save first. Liquid modes (Still Water, Rain Sim, and the hose with
+bake; save first. Liquid modes (Still Water, Rain Sim, Ocean (Simulated), and the hose with
 *Simulate Liquid* on) show a bake button that is mandatory by nature of
 FLIP simulation;
 Reactive Rain's ripple bake is optional but recommended before
@@ -134,8 +177,8 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
 
 ## What's in this version
 
-- All seven modes create, play and delete cleanly; every setup records
-  the version that made it, and updates never change existing setups.
+- Eight modes, including the new simulated-ocean preview; every setup records
+  the version that made it. Feature validation is tracked in `docs/PRESET_REVIEW.md`.
 - Deterministic buoys: floating objects ride the ocean with no bake and
   give identical results on render farms.
 - Programmatic 5-layer Gerstner ocean (fully inspectable node tree).
@@ -156,7 +199,7 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
 
 ## Beta modes
 
-**Still Water, Rain Sim and the hose's Simulate Liquid are Beta.** They run Blender's
+**Still Water, Rain Sim, Ocean (Simulated), and the hose's Simulate Liquid are Beta.** They run Blender's
 Mantaflow liquid solver, so they must be baked, bakes slow down and use
 a lot of RAM as Resolution rises, and Draft (fast) results are coarse.
 They're fully usable — just plan bake time into your shot. A short note
@@ -172,7 +215,7 @@ Planned for future free 1.x updates, in no fixed order and without dates:
 - Hose domain refit when the nozzle is re-aimed (today: click Fit Domain
   at the widest aim).
 - A wetness effect on the Reactive Rain floor.
-- One-click presets (drizzle, storm, calm sea, …).
+- More preset looks after the initial liquid-preset catalogue.
 
 ## Support
 

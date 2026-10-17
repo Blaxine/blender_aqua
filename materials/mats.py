@@ -141,3 +141,65 @@ def mist(mode, uuid_):
         except (AttributeError, TypeError):
             pass
     return mat
+
+
+AOV_NAMES = {'liquid': 'AQS_Liquid', 'spray': 'AQS_Spray',
+             'foam': 'AQS_Foam', 'bubbles': 'AQS_Bubbles'}
+
+
+def element_aov(mat, element, value_socket=None):
+    """Idempotent scalar mask; separate materials supply Cryptomatte IDs."""
+    if not mat.use_nodes:
+        return
+    nt = mat.node_tree
+    node = next((n for n in nt.nodes if n.type == 'OUTPUT_AOV'
+                 and n.get('aqs_aov_element') == element), None)
+    if node is None:
+        node = nt.nodes.new('ShaderNodeOutputAOV')
+        node['aqs_aov_element'] = element
+    if hasattr(node, 'aov_name'):
+        node.aov_name = AOV_NAMES[element]
+    else:
+        node.name = AOV_NAMES[element]  # older 4.x API
+    node.inputs['Value'].default_value = 1.0
+    if value_socket is not None:
+        nt.links.new(value_socket, node.inputs['Value'])
+
+
+def whitewater(mode, uuid_, element):
+    mat = _new_mat('AQS_' + element.title(), mode, uuid_)
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    if element == 'foam':
+        shader = nt.nodes.new('ShaderNodeBsdfDiffuse')
+        shader.inputs['Color'].default_value = (0.93, 0.97, 1.0, 1.0)
+        shader.inputs['Roughness'].default_value = 0.6
+    else:
+        shader = nt.nodes.new('ShaderNodeBsdfGlass')
+        shader.inputs['IOR'].default_value = 1.33
+        shader.inputs['Roughness'].default_value = 0.08
+    info = nt.nodes.new('ShaderNodeObjectInfo')
+    mask = nt.nodes.new('ShaderNodeMath')
+    mask.operation = 'LESS_THAN'
+    mask['aqs_amount'] = True
+    mask.inputs[1].default_value = 1.0
+    nt.links.new(info.outputs['Random'], mask.inputs[0])
+    transparent = nt.nodes.new('ShaderNodeBsdfTransparent')
+    mix = nt.nodes.new('ShaderNodeMixShader')
+    nt.links.new(mask.outputs[0], mix.inputs[0])
+    nt.links.new(transparent.outputs[0], mix.inputs[1])
+    nt.links.new(shader.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs['Surface'])
+    element_aov(mat, element, mask.outputs[0])
+    if hasattr(mat, 'surface_render_method'):
+        mat.surface_render_method = 'DITHERED'
+    elif hasattr(mat, 'blend_method'):
+        mat.blend_method = 'HASHED'
+    return mat
+
+
+def whitewater_amount(mat, fraction):
+    for node in mat.node_tree.nodes:
+        if node.get('aqs_amount'):
+            node.inputs[1].default_value = max(0.0, min(1.0, fraction))

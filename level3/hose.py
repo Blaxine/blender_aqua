@@ -21,6 +21,7 @@ import bmesh
 
 from .. import constants as C
 from ..core import delete, naming, registry
+from ..core import presets, whitewater
 from ..materials import mats
 from ..level2 import still_water as sw
 
@@ -277,8 +278,12 @@ def apply_regime(context, entry, report=None):
     _safe(ds, "cfl_condition", p["cfl"])
     _safe(ds, "timesteps_min", p["ts_min"])
     _safe(ds, "timesteps_max", p["ts_max"])
-    for flag in sw.SECONDARY_FLAGS:          # toggle-on-write: see set_flag
-        sw.set_flag(ds, flag, secondaries)
+    if entry.ww_managed:
+        whitewater.apply(entry)
+    else:
+        # Preserve the behavior of old setups until explicitly adopted.
+        for flag in sw.SECONDARY_FLAGS:
+            sw.set_flag(ds, flag, secondaries)
     _safe(ds, "mesh_scale", 1 if entry.draft else 2)  # mesh upres cost
     if secondaries and report:
         report({"WARNING"}, "AQS-W015: " + C.MSG["W015"])
@@ -312,6 +317,19 @@ class AQS_OT_hose_create(bpy.types.Operator):
                       "real-time flow regimes: Normal, Mist, Spray, Water "
                       "Blast")
     bl_options = {"REGISTER", "UNDO"}
+
+    simulate_liquid: bpy.props.BoolProperty(name="Simulate Liquid (Beta)", default=False)
+    preset: bpy.props.EnumProperty(name="Liquid Preset", items=presets.ITEMS[C.MODE_HOSE],
+                                   default='HOSE_GARDEN')
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, 'simulate_liquid')
+        row = self.layout.row()
+        row.enabled = self.simulate_liquid
+        row.prop(self, 'preset')
 
     @delete.guarded_create
     def execute(self, context):
@@ -453,6 +471,14 @@ class AQS_OT_hose_create(bpy.types.Operator):
         fit_domain(context, entry)
         apply_regime(context, entry, report=self.report)
         apply_color(entry)
+        if self.simulate_liquid:
+            presets.apply(context, entry, self.preset)
+        else:
+            # Store the selected liquid recipe for explicit application later;
+            # keep the default real-time hose path.
+            whitewater.initialize(entry)
+            entry.ww_managed = True
+            entry.preset_choice = self.preset
 
         context.view_layer.objects.active = nozzle
         self.report({"INFO"},
@@ -478,7 +504,9 @@ class AQS_OT_hose_set_regime(bpy.types.Operator):
             # Seed the suggested resolution for this regime; the panel's
             # presets/slider own it from here on.
             entry["base_resolution"] = C.REGIME_PARAMS[self.regime]["resolution"]
+        whitewater.seed_regime(entry)
         apply_regime(context, entry, report=self.report)
+        presets.note_edit(entry)
         return {"FINISHED"}
 
 

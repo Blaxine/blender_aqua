@@ -14,6 +14,7 @@ from mathutils import Vector
 
 from .. import constants as C
 from ..core import delete, naming, registry
+from ..core import presets, whitewater
 from ..materials import mats
 
 RES_PRESETS = {"PREVIEW": 48, "MEDIUM": 96, "HIGH": 160, "ULTRA": 256}
@@ -154,6 +155,12 @@ class AQS_OT_still_water_create(bpy.types.Operator):
                       "(Mantaflow FLIP — baking is mandatory)")
     bl_options = {"REGISTER", "UNDO"}
 
+    preset: bpy.props.EnumProperty(name="Preset", items=presets.ITEMS[C.MODE_STILL],
+                                   default='STILL_CALM')
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
     @classmethod
     def poll(cls, context):
         obj = context.active_object
@@ -214,6 +221,7 @@ class AQS_OT_still_water_create(bpy.types.Operator):
         src[C.SRC_PROP] = uid
 
         add_effectors(scene, dom, uid, report=self.report)
+        presets.apply(context, entry, self.preset)
 
         context.view_layer.objects.active = dom
         self.report({"INFO"},
@@ -331,8 +339,11 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
 
     def execute(self, context):
         if not bpy.data.filepath:
-            self.report({"ERROR"}, "AQS-E020: " + C.MSG["E020"])
-            return {"CANCELLED"}
+            from ..core import errors
+            entry = registry.get(context.scene, self.uuid)
+            return errors.fail(self, "AquaSuite couldn't start the bake",
+                               message="AQS-E020: " + C.MSG["E020"],
+                               mode=entry.mode if entry else "", uuid=self.uuid)
         entry = registry.get(context.scene, self.uuid)
         dom = find_domain_object(entry)
         if dom is None:
@@ -349,6 +360,8 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
                         "Switch to Normal, Spray, or Blast first.")
             return {"CANCELLED"}
         # Ensure the domain is selectable/visible for the operator.
+        # Rebind render instances if Mantaflow recreated any secondary systems.
+        whitewater.apply(entry)
         was_hidden = dom.hide_get() if hasattr(dom, "hide_get") else False
         if was_hidden:
             dom.hide_set(False)

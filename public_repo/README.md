@@ -21,7 +21,7 @@ report the same thing twice.
 
 ## Beta modes
 
-**Still Water, Rain Sim and the hose's Simulate Liquid are Beta.** They use Blender's
+**Still Water, Rain Sim, Ocean (Simulated), and the hose's Simulate Liquid are Beta.** They use Blender's
 Mantaflow liquid solver: they must be baked, bakes get slow and RAM-heavy
 at high Resolution, and Draft results are coarse. Plan bake time into
 your shot.
@@ -34,11 +34,17 @@ Planned for future free 1.x updates, in no fixed order and without dates:
   floating objects reacting to them.
 - Hose domain refit when the nozzle is re-aimed.
 - A wetness effect on the Reactive Rain floor.
-- One-click presets (drizzle, storm, calm sea, …).
+- More preset looks after the initial liquid-preset catalogue.
 
 Have a request? Open an issue with the **Feature request** template.
 
 ## Compatibility promise
+
+The 0.17.0 implementation preview adds twelve liquid presets, per-element
+Spray/Foam/Bubbles controls, Material Cryptomatte and AOV setup, and a simulated
+wave tank. Visual tuning and acceptance checks are still pending; this text does
+not announce a validated release. Existing setups remain Custom until the user
+chooses to adopt the new controls.
 
 From 1.0, updates never change or break setups in your saved files.
 Improvements to existing setups are always opt-in.

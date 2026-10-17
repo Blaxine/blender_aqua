@@ -50,11 +50,13 @@ def run_file(blender, test_file, bake, workdir):
     if bake:
         cmd.append("--bake")
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    returncode = None
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", env=env,
                               timeout=1800 if bake else 300)
         out = proc.stdout + proc.stderr
+        returncode = proc.returncode
     except subprocess.TimeoutExpired as exc:
         out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
         out += f"\n{TAG} FAIL | timeout | gave up after {exc.timeout} s\n"
@@ -68,6 +70,10 @@ def run_file(blender, test_file, bake, workdir):
         elif parts[0] in ("PASS", "FAIL", "SKIP"):
             results.append((parts[0], parts[1] if len(parts) > 1 else "?",
                             parts[2] if len(parts) > 2 else ""))
+    if returncode not in (None, 0):
+        results.append(("FAIL", "Blender process exited unsuccessfully", str(returncode)))
+    if done and not results:
+        results.append(("FAIL", "test file produced no results", "DONE without PASS, FAIL or SKIP"))
     if not done:
         tail = "\n".join(out.splitlines()[-15:])
         results.append(("FAIL", "test file crashed or never finished",

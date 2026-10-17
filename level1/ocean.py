@@ -338,11 +338,7 @@ class AQS_OT_ocean_detach_buoy(bpy.types.Operator):
         if entry is None or self.buoy_index >= len(entry.buoys):
             return {"CANCELLED"}
         b = entry.buoys[self.buoy_index]
-        if b.obj is not None:
-            for n in [n for n in (b.added_constraints or "").split(";") if n]:
-                con = b.obj.constraints.get(n)
-                if con:
-                    b.obj.constraints.remove(con)
+        delete.restore_buoy(b)
         if b.empty is not None:
             bpy.data.objects.remove(b.empty, do_unlink=True)
         entry.buoys.remove(self.buoy_index)

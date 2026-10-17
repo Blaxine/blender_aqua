@@ -51,6 +51,7 @@ MODE_SNOW = "SNOW"
 MODE_STILL = "STILL"
 MODE_SIMRAIN = "SIMRAIN"
 MODE_HOSE = "HOSE"
+MODE_SIMOCEAN = "SIMOCEAN"
 
 MODE_LABELS = {
     MODE_OCEAN: "Plane Ocean",
@@ -60,6 +61,7 @@ MODE_LABELS = {
     MODE_STILL: "Still Water",
     MODE_SIMRAIN: "Rain Simulation",
     MODE_HOSE: "Water Hose",
+    MODE_SIMOCEAN: "Ocean (Simulated)",
 }
 
 MODE_ICONS = {
@@ -70,6 +72,7 @@ MODE_ICONS = {
     MODE_STILL: "MATFLUID",
     MODE_SIMRAIN: "OUTLINER_DATA_VOLUME",
     MODE_HOSE: "FORCE_WIND",
+    MODE_SIMOCEAN: "MOD_OCEAN",
 }
 
 # --- Hose regimes -------------------------------------------------------------

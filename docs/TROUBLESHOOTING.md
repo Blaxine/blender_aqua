@@ -81,3 +81,33 @@
   field name didn't match your exact Blender version. The setup still
   completes; set that one field manually in the physics panel and
   please report your Blender version.
+
+## Presets, whitewater and the simulated ocean (0.17.0 preview)
+
+- **No foam/spray/bubbles:** turn Draft off, enable the element and set Amount
+  above zero, then re-bake. The domain must remain visible to renders. Do not hide
+  it to isolate particles; use the AOV masks or Material Cryptomatte instead.
+- **Whitewater disappears after a toggle:** use the AquaSuite controls and bake
+  again. The add-on binds its render instances to the newly created systems. A
+  legacy system renamed before first discovery cannot be identified safely:
+  restore its original Spray/Foam/Bubbles name and change a Whitewater control.
+  Once adopted, role tags preserve identification across renames.
+- **Different Amount values affect bake cost together:** Mantaflow has a shared
+  spawn budget. AquaSuite derives this from the largest enabled Amount and thins
+  each element's render independently. Turning all three off disables their
+  systems; Free Bake and bake again to remove stale cache data.
+- **Preset says modified:** a saved preset-owned value differs, including edits
+  in Blender's Physics panel. Apply explicitly to reset to the current recipe.
+  This keeps old scenes independent of catalogue changes.
+- **No AOV masks in the compositor:** run Set Up Render Layers on the view layer
+  being rendered, then render again. The four AOVs are Value passes. If a Color
+  AOV already uses one of their names, rename it first. Pick materials with a
+  Cryptomatte node for material mattes.
+- **Ocean waves are too coarse:** at 20 m tank length, Draft resolution 48 gives
+  roughly 42 cm cells. Small waves cannot be resolved at that scale. Reduce tank
+  size or raise resolution, and bake enough frames for several wave periods.
+- **Ocean waves do not hit a rock:** place it inside the tank and add it to Water
+  Obstacles. The paddle is an internal effector and does not need adding there.
+- **Old scene looks different:** compare a saved copy before adopting controls.
+  Loading alone only initialises metadata; it does not apply presets, add
+  whitewater render objects, or change solver flags.

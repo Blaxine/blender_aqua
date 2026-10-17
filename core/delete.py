@@ -21,19 +21,21 @@ CACHE_ROOT = "aquasuite_cache"
 
 # Datablock collections that can carry an ``aqs_owner`` tag.
 _TAGGED_COLLECTIONS = ("objects", "meshes", "particles", "node_groups",
-                       "materials", "collections")
+                       "materials", "collections", "actions")
+
+
+def restore_buoy(b):
+    """Match the dedicated driver target, never a mutable constraint name."""
+    if b.obj is None or b.empty is None:
+        return
+    for con in list(b.obj.constraints):
+        if con.type in {"COPY_LOCATION", "COPY_ROTATION"} and con.target == b.empty:
+            b.obj.constraints.remove(con)
 
 
 def _restore_buoys(entry):
     for b in entry.buoys:
-        obj = b.obj
-        if obj is None:
-            continue
-        names = [n for n in (b.added_constraints or "").split(";") if n]
-        for n in names:
-            con = obj.constraints.get(n)
-            if con is not None:
-                obj.constraints.remove(con)
+        restore_buoy(b)
 
 
 def _restore_one_source(src, uuid, hide_render, display_type):
@@ -166,6 +168,7 @@ def delete_assembly(scene, assembly_uuid, delete_cache=False):
     _remove_tagged(d.node_groups, assembly_uuid, lambda n: d.node_groups.remove(n))
     _remove_tagged(d.materials, assembly_uuid, lambda m: d.materials.remove(m))
     _remove_tagged(d.collections, assembly_uuid, lambda c: d.collections.remove(c))
+    _remove_tagged(d.actions, assembly_uuid, lambda a: d.actions.remove(a))
 
     registry.remove(scene, assembly_uuid)
 
@@ -173,9 +176,10 @@ def delete_assembly(scene, assembly_uuid, delete_cache=False):
         remove_cache(assembly_uuid)
 
     # Prune the root collection if it is now empty.
-    root = d.collections.get(C.ROOT_COLLECTION)
-    if root is not None and not root.children and not root.objects:
-        d.collections.remove(root)
+    from . import naming
+    for root in list(scene.collection.children):
+        if root.get(naming.ROOT_PROP) and not root.children and not root.objects:
+            d.collections.remove(root)
 
 
 def _owner_uuids():
@@ -209,6 +213,8 @@ def guarded_create(execute):
             for u in _owner_uuids() - before:
                 delete_assembly(context.scene, u)
         elif len(context.scene.aqs_assemblies) > count:
+            from . import quality
+            quality.apply_tier(context.scene)
             from ..ui import beta
             beta.notify_created(context.scene.aqs_assemblies[-1].mode)
         return result

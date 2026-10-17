@@ -5,6 +5,7 @@ import bpy
 
 from .. import constants as C
 from ..core import registry, delete, errors, bakes
+from ..core import presets, whitewater
 from . import beta
 from ..level1 import ocean as ocean_mod
 
@@ -186,7 +187,7 @@ def _draw_fluid_settings(box, entry):
         dx_cm = longest / eff * 100.0
         cost = (eff / 96.0) ** 3
         note = f"Effective {eff} · voxel {dx_cm:.1f} cm · ~{cost:.1f}× cost"
-        if entry.mode in ("HOSE", "SIMRAIN") and entry.draft:
+        if entry.mode in ("HOSE", "SIMRAIN", C.MODE_SIMOCEAN, C.MODE_STILL) and entry.draft and entry.ww_managed:
             note += "  (Draft ½)"
         sub = box.row()
         sub.enabled = False
@@ -235,7 +236,58 @@ def _draw_bake(box, entry, op_bake, op_free=None, mandatory=True):
         op.uuid = entry.uuid
 
 
+def _draw_preset(box, entry):
+    col = box.column(align=True)
+    col.enabled = not bakes.is_baking(entry)
+    label = entry.preset_label or 'Custom'
+    if presets.is_modified(entry):
+        label += ' (modified)'
+    col.label(text=label, icon='PRESET')
+    row = col.row(align=True)
+    row.prop(entry, 'preset_choice', text='Preset')
+    sub = row.row(align=True)
+    sub.enabled = entry.preset_choice != 'CUSTOM'
+    op = sub.operator('aquasuite.apply_preset', text='Apply')
+    op.uuid = entry.uuid
+
+
+def _draw_whitewater(box, entry):
+    col = box.column(align=True)
+    col.enabled = not bakes.is_baking(entry)
+    col.label(text='Whitewater')
+    if entry.draft and entry.ww_managed:
+        col.label(text='Off while Draft is on', icon='INFO')
+    if not entry.ww_managed:
+        col.label(text='Existing solver settings; edit to enable controls', icon='INFO')
+    for element in whitewater.ELEMENTS:
+        row = col.row(align=True)
+        row.prop(entry, 'ww_' + element, text=whitewater.NAMES[element])
+        sliders = row.row(align=True)
+        sliders.enabled = getattr(entry, 'ww_' + element) and not (entry.draft and entry.ww_managed)
+        sliders.prop(entry, 'ww_' + element + '_amount', text='Amount')
+        sliders.prop(entry, 'ww_' + element + '_size', text='Size')
+    if entry.ww_warning:
+        warn = col.column()
+        warn.alert = True
+        warn.label(text=entry.ww_warning, icon='ERROR')
+
+
+def _draw_simulated_ocean(box, entry, context):
+    _draw_preset(box, entry)
+    controls = box.column(align=True)
+    controls.enabled = not bakes.is_baking(entry)
+    controls.prop(entry, 'wave_height')
+    controls.prop(entry, 'wave_period')
+    controls.prop(entry, 'tank_size')
+    controls.prop(entry, 'draft', toggle=True)
+    _draw_fluid_settings(controls, entry)
+    _draw_whitewater(box, entry)
+    _draw_obstacles(box, context)
+    _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_fluid')
+
+
 def _draw_rain_sim(box, entry, context):
+    _draw_preset(box, entry)
     colm = box.column(align=True)
     colm.prop(entry, "rain_speed")
     colm.prop(entry, "rain_angle")
@@ -289,6 +341,7 @@ def _draw_rain_sim(box, entry, context):
                       icon="SHADING_BBOX")
     op.uuid = entry.uuid
     _draw_fluid_settings(box, entry)
+    _draw_whitewater(box, entry)
     _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
 
 
@@ -326,6 +379,7 @@ def _draw_hose(box, entry, context):
              icon="CHECKBOX_HLT" if entry.hose_liquid else "CHECKBOX_DEHLT")
     if not entry.hose_liquid:
         return
+    _draw_preset(box, entry)
     box.prop(entry, "hose_range")
     from ..level3.hose import clamp_state
     clamp = clamp_state(entry)
@@ -343,6 +397,7 @@ def _draw_hose(box, entry, context):
                       icon="SHADING_BBOX")
     op.uuid = entry.uuid
     _draw_fluid_settings(box, entry)
+    _draw_whitewater(box, entry)
     _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
 
 
@@ -388,10 +443,15 @@ class AQS_PT_water(bpy.types.Panel):
         row.operator("aquasuite.hose_create", text="Water Hose")
         row.operator("aquasuite.rain_sim_create", text="Rain Sim · Beta",
                      icon=C.MODE_ICONS[C.MODE_SIMRAIN])
+        create.operator('aquasuite.simulated_ocean_create',
+                        text='Ocean (Simulated) · Beta', icon='MOD_OCEAN')
 
         entries = registry.entries(scene)
         if not entries:
             return
+        if any(e.mode in presets.LIQUID_MODES and
+               (e.mode != C.MODE_HOSE or e.hose_liquid) for e in entries):
+            layout.operator('aquasuite.setup_render_layers', icon='RENDERLAYERS')
         layout.separator()
         layout.label(text="Assemblies", icon="OUTLINER_COLLECTION")
 
@@ -428,13 +488,19 @@ class AQS_PT_water(bpy.types.Panel):
             _draw_particles(box, entry)
             _draw_bake(box, entry, "aquasuite.bake_ripples", mandatory=False)
         elif entry.mode == C.MODE_STILL:
+            _draw_preset(box, entry)
+            if entry.ww_managed:
+                box.prop(entry, 'draft', toggle=True)
             _draw_obstacles(box, context)
             _draw_fluid_settings(box, entry)
+            _draw_whitewater(box, entry)
             _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
         elif entry.mode == C.MODE_HOSE:
             _draw_hose(box, entry, context)
         elif entry.mode == C.MODE_SIMRAIN:
             _draw_rain_sim(box, entry, context)
+        elif entry.mode == C.MODE_SIMOCEAN:
+            _draw_simulated_ocean(box, entry, context)
 
 
 CLASSES = (AQS_OT_assembly_delete, AQS_OT_set_resolution,

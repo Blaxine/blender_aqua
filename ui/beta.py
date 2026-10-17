@@ -13,9 +13,9 @@ ADDON_ID = __package__.rpartition(".")[0]
 
 # The Water Hose is real-time; only its "Simulate Liquid" toggle is Beta
 # (labelled in its panel).
-BETA_MODES = (C.MODE_STILL, C.MODE_SIMRAIN)
+BETA_MODES = (C.MODE_STILL, C.MODE_SIMRAIN, C.MODE_SIMOCEAN)
 _FLAG = {C.MODE_STILL: "beta_seen_still",
-         C.MODE_SIMRAIN: "beta_seen_simrain"}
+         C.MODE_SIMRAIN: "beta_seen_simrain", C.MODE_SIMOCEAN: "beta_seen_simocean"}
 
 NOTE_LINES = (
     "Liquid modes must be baked before they play or render.",
@@ -106,10 +106,11 @@ class AQS_Preferences(bpy.types.AddonPreferences):
 
     beta_seen_still: BoolProperty(default=False)
     beta_seen_simrain: BoolProperty(default=False)
+    beta_seen_simocean: BoolProperty(default=False)
 
     def draw(self, _context):
         col = self.layout.column()
-        col.label(text="Still Water, Rain Simulation and the hose's Simulate "
+        col.label(text="Still Water, Rain Simulation, Ocean (Simulated) and the hose's Simulate "
                        "Liquid are Beta: "
                        "a note explains what that means the first time each "
                        "is created.")

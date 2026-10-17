@@ -17,16 +17,17 @@ from .. import constants as C
 from ..level1 import ocean as ocean_mod
 
 
-def _tagged_particles():
+def _tagged_particles(scene):
+    owners = {f"{e.mode}:{e.uuid}" for e in scene.aqs_assemblies}
     for ps in bpy.data.particles:
-        if C.OWNER_PROP in ps.keys():
+        if ps.get(C.OWNER_PROP) in owners:
             yield ps
 
 
 def apply_tier(scene):
     preview = scene.aqs_quality == "PREVIEW"
 
-    for ps in _tagged_particles():
+    for ps in _tagged_particles(scene):
         if preview:
             if C.AUTHORED_PROP not in ps.keys():
                 ps[C.AUTHORED_PROP] = float(ps.display_percentage)
@@ -49,7 +50,7 @@ def apply_tier(scene):
         if preview:
             if C.AUTHORED_PROP not in obj.keys():
                 obj[C.AUTHORED_PROP] = int(res)
-            ocean_mod.set_input(mod, "Resolution", max(16, int(res) // 2))
+            ocean_mod.set_input(mod, "Resolution", max(16, int(obj[C.AUTHORED_PROP]) // 2))
         else:
             if C.AUTHORED_PROP in obj.keys():
                 ocean_mod.set_input(mod, "Resolution", int(obj[C.AUTHORED_PROP]))
@@ -59,7 +60,7 @@ def apply_tier(scene):
 
 def on_quality_update(self, context):
     try:
-        apply_tier(context.scene)
+        apply_tier(self)
     except Exception as exc:  # never break the UI on a tier flip
         from . import errors
         errors.record("AquaSuite couldn't switch the quality tier", exc)

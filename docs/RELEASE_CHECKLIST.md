@@ -6,6 +6,17 @@ included in the extension zip.)
 
 Version under test: `________`  Date: `________`
 
+## 0.17.0 feature review gate
+
+- [ ] Complete [the preset manual review](PRESET_REVIEW.md) in Blender 5.1.
+- [ ] All twelve presets produce distinct, usable baked results.
+- [ ] Whitewater renders in Cycles and EEVEE after off/on and Draft transitions.
+- [ ] Cryptomatte and all four AOV masks separate the intended elements.
+- [ ] Simulated-ocean waves propagate, hit an obstacle, and differ by preset.
+- [ ] A v0.16.1 scene opens unchanged; save/reload preserves adopted controls.
+- [ ] Return to automated functional checks after the manual review; extend and
+      run the suite before release. Implementation alone does not satisfy this gate.
+
 ## 1. Automated suite
 
 - [ ] `tests/blender_paths.local.json` lists Blender 5.1 (and 4.1 as an older-version check)

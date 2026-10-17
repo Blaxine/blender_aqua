@@ -40,3 +40,8 @@ before introducing it anywhere else.
 | Water level | Where Rain Simulation rain meets water: top of the highest pool source, or z = 0 without pools. | |
 | Water Obstacles | The scene's `AQS Water Obstacles` collection: the only rule for what blocks water in every simulation. | AquaSuite adds Collision/Effector as needed and removes exactly that when an object leaves the collection. |
 | Wave table | The fixed Gerstner layer constants shared by the ocean node tree and the buoy handler. | Changing it changes every ocean. |
+| Preset | An editable package applied once to a liquid assembly. | Saved values and a snapshot are independent of future catalogue changes. |
+| Whitewater | Secondary Spray, Foam and Bubbles created by Mantaflow. | Draft suspends them; Amount and render Size are per element. |
+| Render Layers setup | Material Cryptomatte plus AQS_Liquid, AQS_Spray, AQS_Foam and AQS_Bubbles scalar AOVs on the active view layer. | Does not create additional view layers. |
+| Ocean (Simulated) | A Beta liquid wave tank, filled once and driven by a paddle. | Separate from the procedural Gerstner ocean; no buoy support. |
+| Wave Paddle | A tagged fluid effector driven by a sine F-Curve modifier. | Wave Height controls stroke; Wave Period is seconds per cycle. |

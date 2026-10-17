@@ -75,7 +75,8 @@ def test_package():
     code, out = _blender("-b", "--python-expr", LOAD_SCRIPT, "--", pkg)
     loaded = [ln for ln in out.splitlines() if ln.startswith("ZIPLOAD")]
     lib.check("add-on from the zip registers and runs every mode",
-              loaded == ["ZIPLOAD 6"], (loaded or [out.strip()[-300:]])[0])
+              code == 0 and loaded == ["ZIPLOAD 6"],
+              f"exit {code}: " + (loaded or [out.strip()[-300:]])[0])
 
 
 lib.main(globals())

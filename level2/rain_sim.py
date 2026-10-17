@@ -42,6 +42,7 @@ from mathutils import Vector
 
 from .. import constants as C
 from ..core import delete, naming, registry
+from ..core import presets, whitewater
 from ..materials import mats
 from ..level1 import rain as rain_mod
 from ..level1 import ocean as gn_io   # generic GN-modifier input get/set
@@ -460,6 +461,7 @@ def apply_quality(context, entry):
     if dom.display_type == "WIRE":       # heal older assemblies too
         dom.display_type = "TEXTURED"
     tune_drop_size(entry)
+    whitewater.apply(entry)
 
 
 SPLASH_HEADROOM = 0.6   # metres of air above the water for splash crowns
@@ -556,8 +558,14 @@ def apply_area(entry):
     ys = [v.co.y for v in emitter.data.vertices]
     size_x = max(max(xs) - min(xs), 1e-6)
     size_y = max(max(ys) - min(ys), 1e-6)
-    emitter.scale.x = entry.rain_area / size_x
-    emitter.scale.y = entry.rain_area / size_y
+    # Resize the base plane, which is shared by the visible drops. Scaling
+    # the object also scales GN velocity, streaks and splash blobs.
+    for vertex in emitter.data.vertices:
+        vertex.co.x *= entry.rain_area / size_x
+        vertex.co.y *= entry.rain_area / size_y
+    emitter.scale.x = 1.0
+    emitter.scale.y = 1.0
+    emitter.data.update()
 
 
 def build_emitter(context, col, uid, area, location):
@@ -618,6 +626,9 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
     bl_description = ("Real Mantaflow rain: drops splash and ripple in pool "
                       "water (opens a setup menu)")
     bl_options = {"REGISTER", "UNDO"}
+
+    preset: bpy.props.EnumProperty(name="Preset", items=presets.ITEMS[C.MODE_SIMRAIN],
+                                   default='RAIN_RAIN')
 
     area: bpy.props.FloatProperty(
         name="Rain Area", default=4.0, min=1.0, max=30.0, subtype="DISTANCE",
@@ -689,6 +700,16 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
         entry["rain_angle"] = self.angle
         entry["rain_direction"] = self.direction
         entry["rain_density"] = max(0.2, self.rate / max(self.area ** 2, 1.0))
+
+        # Create parameters that are not in the preset (area/height/heading)
+        # remain authored; speed and density come from the selected recipe.
+        presets.apply(context, entry, self.preset)
+        # Explicit Create/redo overrides remain useful for scripts and artists.
+        # Untouched controls take their values from the selected preset.
+        if self.properties.is_property_set('speed'):
+            entry.rain_speed = self.speed
+        if self.properties.is_property_set('rate'):
+            entry.rain_density = max(0.2, self.rate / max(self.area ** 2, 1.0))
 
         # Tail setup: each guarded so a single RNA quirk can't roll back
         # the whole creation (leaving no emitter behind).
