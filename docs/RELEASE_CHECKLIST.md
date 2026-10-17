@@ -26,7 +26,10 @@ Version under test: `________`  Date: `________`
 - [ ] Reactive Rain: create, play, Bake Ripples — ripples appear on the floor
 - [ ] Snow: create, play — seven flake shapes tumble down
 - [ ] Still Water (Beta): Beta note appears on the first create only; bake (Draft) — liquid appears
-- [ ] Water Hose (Beta): Beta note on first create; jet fires **along the nozzle's aim**; Normal bake shows a stream; switch to Mist — mist cone along the aim
+- [ ] Water Hose: no Beta note; press Play — Normal is a **thin stream along the nozzle's aim**, Spray a broken-up cone, Blast a long fast jet, Mist a fog cone; all render (F12) and Water Color tints them
+- [ ] Hose aimed at a floor + wall in **Water Obstacles**: the water hits them and slides along; a Collision object **not** in the collection is ignored
+- [ ] Hose → Simulate Liquid (Beta): bake (Draft) — liquid appears along the aim; turn it off — the jet is back
+- [ ] Water obstacles row (＋ / −): add a cube from each liquid box; remove it, or unlink it in the Outliner — its added modifiers disappear, your own Collision stays
 - [ ] Rain Sim (Beta): Beta note on first create; add a pool mesh; bake — splashes and ripples in the pool; rendered drops are thin and end at the water
 - [ ] Rain Sim at Angle 45°: streaks lean along the direction of fall
 - [ ] Start a liquid bake at High resolution: the panel shows "Baking…" with **Cancel Bake**; Cancel stops it within a few seconds, Blender stays responsive, frames baked so far still play; Free Bake removes them

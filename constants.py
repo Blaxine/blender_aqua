@@ -79,13 +79,31 @@ REGIME_SPRAY = "SPRAY"
 REGIME_BLAST = "BLAST"
 
 REGIME_ITEMS = [
-    (REGIME_NORMAL, "Normal Flow", "Coherent laminar stream (Mantaflow, bake required)"),
-    (REGIME_MIST, "Mist", "Fine hanging fog cone (particles, real-time)"),
-    (REGIME_SPRAY, "Spray", "Broken-up shower with spray secondaries (Mantaflow, bake required)"),
-    (REGIME_BLAST, "Water Blast", "High-velocity fire-hose jet (Mantaflow, bake required)"),
+    (REGIME_NORMAL, "Normal Flow", "Coherent stream of water (real-time)"),
+    (REGIME_MIST, "Mist", "Fine hanging fog cone (real-time)"),
+    (REGIME_SPRAY, "Spray", "Broken-up shower of droplets (real-time)"),
+    (REGIME_BLAST, "Water Blast", "High-velocity fire-hose jet (real-time)"),
 ]
 
 # Regime parameter packages (R1.9-corrected Blast defaults).
+# Real-time particle jets (Normal / Spray / Blast).  velocity in m/s at
+# Pressure 1; random = random velocity as a fraction of velocity, plus
+# spread_gain * tan(Spread); rate = droplets per second; size = droplet
+# radius in metres; lifetime in seconds.
+JET_PARAMS = {
+    REGIME_NORMAL: dict(velocity=7.0, random=0.015, spread_gain=0.25,
+                        rate=4500, size=0.005, size_random=0.3,
+                        lifetime=2.0, drag=0.0),
+    REGIME_SPRAY: dict(velocity=9.0, random=0.08, spread_gain=0.6,
+                       rate=5000, size=0.004, size_random=0.6,
+                       lifetime=1.6, drag=0.05),
+    REGIME_BLAST: dict(velocity=18.0, random=0.02, spread_gain=0.35,
+                       rate=7000, size=0.006, size_random=0.3,
+                       lifetime=1.2, drag=0.0),
+}
+MAX_JET_PARTICLES = 150000
+
+# Optional liquid simulation ("Simulate liquid", Beta) per regime.
 REGIME_PARAMS = {
     REGIME_NORMAL: dict(velocity=6.0, radius=0.03, resolution=96,
                         cfl=4.0, ts_min=1, ts_max=4, secondaries=False),

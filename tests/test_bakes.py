@@ -69,6 +69,7 @@ def test_bakes():
 
     bpy.ops.aquasuite.hose_create()
     u = lib.last_uuid()
+    lib.entry(u).hose_liquid = True
     lib.entry(u).base_resolution = 48           # Draft halves it
     _report("Hose (Normal)", _bake(u), 0.01, growing=True)
 

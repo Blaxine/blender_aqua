@@ -22,8 +22,8 @@ def _flags():
 
 
 def test_beta_modes():
-    lib.check("exactly the three liquid modes are Beta",
-              set(beta.BETA_MODES) == {C.MODE_STILL, C.MODE_HOSE, C.MODE_SIMRAIN}
+    lib.check("Still Water and Rain Sim are Beta; the hose is not",
+              set(beta.BETA_MODES) == {C.MODE_STILL, C.MODE_SIMRAIN}
               and not beta.is_beta(C.MODE_OCEAN) and not beta.is_beta(C.MODE_RAIN))
 
 
@@ -40,11 +40,12 @@ def test_note_once_per_mode():
     bpy.ops.aquasuite.still_water_create()
     f1 = _flags()
     lib.check("first Still Water create marks its note seen",
-              f1[C.MODE_STILL] and not f1[C.MODE_HOSE] and not f1[C.MODE_SIMRAIN], str(f1))
+              f1[C.MODE_STILL] and not f1[C.MODE_SIMRAIN], str(f1))
     lib.check("second create: note not due again", not beta.note_due(C.MODE_STILL))
     bpy.ops.aquasuite.hose_create()
+    lib.check("hose create shows no Beta note", not _flags()[C.MODE_SIMRAIN])
     bpy.ops.aquasuite.rain_sim_create()
-    lib.check("Hose and Rain Sim notes marked on first create", all(_flags().values()),
+    lib.check("Rain Sim note marked on first create", all(_flags().values()),
               str(_flags()))
 
 

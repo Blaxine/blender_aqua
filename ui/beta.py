@@ -11,9 +11,10 @@ from .. import constants as C
 # when installed as an extension.  AddonPreferences must use exactly this.
 ADDON_ID = __package__.rpartition(".")[0]
 
-BETA_MODES = (C.MODE_STILL, C.MODE_HOSE, C.MODE_SIMRAIN)
+# The Water Hose is real-time; only its "Simulate Liquid" toggle is Beta
+# (labelled in its panel).
+BETA_MODES = (C.MODE_STILL, C.MODE_SIMRAIN)
 _FLAG = {C.MODE_STILL: "beta_seen_still",
-         C.MODE_HOSE: "beta_seen_hose",
          C.MODE_SIMRAIN: "beta_seen_simrain"}
 
 NOTE_LINES = (
@@ -104,12 +105,12 @@ class AQS_Preferences(bpy.types.AddonPreferences):
     bl_idname = ADDON_ID
 
     beta_seen_still: BoolProperty(default=False)
-    beta_seen_hose: BoolProperty(default=False)
     beta_seen_simrain: BoolProperty(default=False)
 
     def draw(self, _context):
         col = self.layout.column()
-        col.label(text="Still Water, Water Hose and Rain Simulation are Beta: "
+        col.label(text="Still Water, Rain Simulation and the hose's Simulate "
+                       "Liquid are Beta: "
                        "a note explains what that means the first time each "
                        "is created.")
         col.operator("aquasuite.reset_beta_notes", icon="LOOP_BACK")

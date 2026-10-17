@@ -235,7 +235,7 @@ def _draw_bake(box, entry, op_bake, op_free=None, mandatory=True):
         op.uuid = entry.uuid
 
 
-def _draw_rain_sim(box, entry):
+def _draw_rain_sim(box, entry, context):
     colm = box.column(align=True)
     colm.prop(entry, "rain_speed")
     colm.prop(entry, "rain_angle")
@@ -281,6 +281,7 @@ def _draw_rain_sim(box, entry):
         sub.label(text=rec.obj.name if rec.obj else "<missing>",
                   icon="MATFLUID")
 
+    _draw_obstacles(box, context)
     row = box.row(align=True)
     row.prop(entry, "draft", toggle=True)
     op = row.operator("aquasuite.rain_sim_fit_domain", text="Fit Domain",
@@ -290,12 +291,19 @@ def _draw_rain_sim(box, entry):
     _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
 
 
-def _draw_hose(box, entry):
-    colm = box.column(align=True)
-    colm.prop(entry, "pressure")
-    colm.prop(entry, "hose_range")
-    colm.prop(entry, "spread")
-    colm.prop(entry, "nozzle_radius")
+def _draw_obstacles(box, context):
+    """Shared by every liquid setup: the scene's Water Obstacles."""
+    from ..core import obstacles
+    n = len(obstacles.members(context.scene))
+    row = box.row(align=True)
+    row.label(text=f"Water obstacles: {n}", icon="MOD_PHYSICS")
+    row.operator("aquasuite.obstacles_add", text="", icon="ADD")
+    sub = row.row(align=True)
+    sub.enabled = n > 0
+    sub.operator("aquasuite.obstacles_remove", text="", icon="REMOVE")
+
+
+def _draw_hose(box, entry, context):
     row = box.row(align=True)
     for rid, label, _desc in C.REGIME_ITEMS:
         op = row.operator("aquasuite.hose_set_regime",
@@ -303,24 +311,38 @@ def _draw_hose(box, entry):
                           depress=(entry.regime == rid))
         op.uuid = entry.uuid
         op.regime = rid
-    if entry.regime != C.REGIME_MIST:
-        from ..level3.hose import clamp_state
-        clamp = clamp_state(entry)
-        if clamp is not None:
-            warn = box.column(align=True)
-            warn.alert = True
-            warn.label(text=f"Jet slowed to {clamp[0]:.1f} m/s for stability",
-                       icon="ERROR")
-            warn.label(text="Lower Pressure or Resolution (or use Draft) "
-                            "for full speed")
-        row = box.row(align=True)
-        row.prop(entry, "draft", toggle=True,
-                 icon="CHECKBOX_HLT" if entry.draft else "CHECKBOX_DEHLT")
-        op = row.operator("aquasuite.hose_fit_domain", text="Fit Domain",
-                          icon="SHADING_BBOX")
-        op.uuid = entry.uuid
-        _draw_fluid_settings(box, entry)
-        _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
+    colm = box.column(align=True)
+    colm.prop(entry, "pressure")
+    colm.prop(entry, "spread")
+    colm.prop(entry, "nozzle_radius")
+    colm.prop(entry, "hose_color")
+    _draw_obstacles(box, context)
+    if entry.regime == C.REGIME_MIST:
+        return
+    row = box.row(align=True)
+    row.prop(entry, "hose_liquid", toggle=True,
+             text="Simulate Liquid (Beta)",
+             icon="CHECKBOX_HLT" if entry.hose_liquid else "CHECKBOX_DEHLT")
+    if not entry.hose_liquid:
+        return
+    box.prop(entry, "hose_range")
+    from ..level3.hose import clamp_state
+    clamp = clamp_state(entry)
+    if clamp is not None:
+        warn = box.column(align=True)
+        warn.alert = True
+        warn.label(text=f"Jet slowed to {clamp[0]:.1f} m/s for stability",
+                   icon="ERROR")
+        warn.label(text="Lower Pressure or Resolution (or use Draft) "
+                        "for full speed")
+    row = box.row(align=True)
+    row.prop(entry, "draft", toggle=True,
+             icon="CHECKBOX_HLT" if entry.draft else "CHECKBOX_DEHLT")
+    op = row.operator("aquasuite.hose_fit_domain", text="Fit Domain",
+                      icon="SHADING_BBOX")
+    op.uuid = entry.uuid
+    _draw_fluid_settings(box, entry)
+    _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
 
 
 def _draw_pre_release(box, entry):
@@ -362,7 +384,7 @@ class AQS_PT_water(bpy.types.Panel):
         row.operator("aquasuite.still_water_create",
                      text="Still Water (active mesh) · Beta")
         row = create.row(align=True)
-        row.operator("aquasuite.hose_create", text="Water Hose · Beta")
+        row.operator("aquasuite.hose_create", text="Water Hose")
         row.operator("aquasuite.rain_sim_create", text="Rain Sim · Beta",
                      icon=C.MODE_ICONS[C.MODE_SIMRAIN])
 
@@ -377,7 +399,8 @@ class AQS_PT_water(bpy.types.Panel):
             header = box.row(align=True)
             header.label(text=C.MODE_LABELS.get(entry.mode, entry.mode),
                          icon=C.MODE_ICONS.get(entry.mode, "QUESTION"))
-            if beta.is_beta(entry.mode):
+            if beta.is_beta(entry.mode) or (entry.mode == C.MODE_HOSE
+                                            and entry.hose_liquid):
                 header.label(text="Beta", icon="EXPERIMENTAL")
             header.label(text=f"AQS_A_{entry.uuid[:8]}")
             op = header.operator("aquasuite.assembly_delete", text="", icon="TRASH")
@@ -404,12 +427,13 @@ class AQS_PT_water(bpy.types.Panel):
             _draw_particles(box, entry)
             _draw_bake(box, entry, "aquasuite.bake_ripples", mandatory=False)
         elif entry.mode == C.MODE_STILL:
+            _draw_obstacles(box, context)
             _draw_fluid_settings(box, entry)
             _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
         elif entry.mode == C.MODE_HOSE:
-            _draw_hose(box, entry)
+            _draw_hose(box, entry, context)
         elif entry.mode == C.MODE_SIMRAIN:
-            _draw_rain_sim(box, entry)
+            _draw_rain_sim(box, entry, context)
 
 
 CLASSES = (AQS_OT_assembly_delete, AQS_OT_set_resolution,

@@ -10,17 +10,17 @@ blender_manifest.toml (the single source of the add-on version).
 """
 
 import bpy
-from bpy.props import CollectionProperty, EnumProperty
+from bpy.props import CollectionProperty, EnumProperty, PointerProperty
 
 from . import constants as C
-from .core import registry, handlers, quality, errors, bakes
+from .core import registry, handlers, quality, errors, bakes, obstacles
 from .level1 import ocean, rain, rain_reactive, snow
 from .level2 import still_water, rain_sim
 from .level3 import hose
 from .ui import panel, beta
 
 
-_MODULES = (errors, bakes, ocean, rain, rain_reactive, snow, still_water, rain_sim,
+_MODULES = (errors, bakes, obstacles, ocean, rain, rain_reactive, snow, still_water, rain_sim,
             hose, panel, beta)
 
 
@@ -51,14 +51,21 @@ def register():
         update=quality.on_quality_update,
         description="Scene-wide AquaSuite quality tier (TDD §5.1)")
 
+    bpy.types.Scene.aqs_obstacles = PointerProperty(
+        type=bpy.types.Collection, name="Water Obstacles",
+        description="Objects in this collection block water in every AquaSuite simulation")
+
     handlers.register()
+    obstacles.register()
 
 
 def unregister():
+    obstacles.unregister()
     handlers.unregister()
     errors.unregister()
     bakes.unregister()
 
+    del bpy.types.Scene.aqs_obstacles
     del bpy.types.Scene.aqs_quality
     del bpy.types.Scene.aqs_assemblies
 

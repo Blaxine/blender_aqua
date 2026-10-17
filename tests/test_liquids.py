@@ -31,6 +31,7 @@ def test_setup():
     U["rs"] = lib.last_uuid()
     bpy.ops.aquasuite.hose_create()
     U["hose"] = lib.last_uuid()
+    lib.entry(U["hose"]).hose_liquid = True    # liquid checks below
     lib.check("liquid setups created", all(lib.entry(u) for u in U.values()))
 
 

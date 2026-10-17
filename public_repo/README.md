@@ -21,7 +21,7 @@ report the same thing twice.
 
 ## Beta modes
 
-**Still Water, Water Hose and Rain Sim are Beta.** They use Blender's
+**Still Water, Rain Sim and the hose's Simulate Liquid are Beta.** They use Blender's
 Mantaflow liquid solver: they must be baked, bakes get slow and RAM-heavy
 at high Resolution, and Draft results are coarse. Plan bake time into
 your shot.

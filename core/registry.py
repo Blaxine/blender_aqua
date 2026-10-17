@@ -5,6 +5,7 @@ import bpy
 from bpy.props import (
     CollectionProperty,
     EnumProperty,
+    FloatVectorProperty,
     FloatProperty,
     IntProperty,
     PointerProperty,
@@ -100,6 +101,14 @@ def _hose_params_update(self, context):
     hose.apply_regime(context, self)
 
 
+@errors.guard_update("AquaSuite couldn't change the water color")
+def _hose_color_update(self, context):
+    if self.mode != "HOSE":
+        return
+    from ..level3 import hose
+    hose.apply_color(self)
+
+
 @errors.guard_update("AquaSuite couldn't apply that change")
 def _hose_domain_update(self, context):
     if self.mode != "HOSE":
@@ -143,6 +152,16 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
         name="Nozzle Radius", default=0.03, min=0.005, max=0.2,
         subtype="DISTANCE", update=_hose_params_update,
         description="Physical emitter radius")
+    hose_liquid: BoolProperty(
+        name="Simulate Liquid", default=False, update=_hose_params_update,
+        description="Beta: replace the real-time jet with a Mantaflow "
+                    "liquid simulation (pools and splashes, but must be "
+                    "baked and is much thicker than a real jet)")
+    hose_color: FloatVectorProperty(
+        name="Water Color", size=3, subtype="COLOR", min=0.0, max=1.0,
+        default=(0.85, 0.92, 1.0), update=_hose_color_update,
+        description="Tint of the hose water: jet droplets, mist and "
+                    "simulated liquid")
     draft: BoolProperty(
         name="Draft Quality", default=True,
         update=_resolution_update,

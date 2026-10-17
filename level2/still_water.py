@@ -7,7 +7,6 @@ recorded for restore.  Effectors follow the R1.4 refcount + conflict
 policy.
 """
 
-import json
 
 import bpy
 import bmesh
@@ -125,102 +124,18 @@ def setup_domain_settings(dom_mod, uid, resolution, cfl=4.0,
 
 
 def add_effectors(scene, domain, uid, report=None):
-    """R1.4/§5.3a-b: eligibility + conflict policy + refcounting.
-
-    NOTE: no bounding-box gate — an ANIMATED object can start outside
-    the domain and enter later, so testing intersection at the current
-    frame silently drops real obstacles (the 'only one of my two cubes
-    works' bug). Mantaflow ignores effectors that never enter the
-    domain, so registering every Collision-enabled mesh is free.
-    """
-    skipped = []
-    for obj in scene.objects:
-        if obj.type != "MESH" or obj == domain:
-            continue
-        has_collision = any(m.type == "COLLISION" for m in obj.modifiers)
-        if not has_collision:
-            continue
-        if C.SRC_PROP in obj.keys():
-            continue  # an AquaSuite liquid source — its Flow is ours, not a conflict
-        fluid = next((m for m in obj.modifiers if m.type == "FLUID"), None)
-        if fluid is not None:
-            if fluid.fluid_type != "EFFECTOR":
-                skipped.append(obj.name)      # Flow/Domain conflict -> skip
-                continue
-            if C.EFFECTOR_OWNERS_PROP not in obj.keys():
-                # A USER-made effector: it already works as an obstacle.
-                # Do not refcount, never touch, never remove.  (Ownership
-                # is the owner list, never the modifier name — renaming
-                # our modifier must not turn it into "user" data.)
-                continue
-        if fluid is None:
-            fluid = obj.modifiers.new("AQS Effector", "FLUID")
-            fluid.fluid_type = "EFFECTOR"
-            es = fluid.effector_settings
-            _safe(es, "effector_type", "COLLISION")
-        owners = []
-        raw = obj.get(C.EFFECTOR_OWNERS_PROP)
-        if raw:
-            try:
-                owners = json.loads(raw)
-            except Exception:
-                owners = []
-        if uid not in owners:
-            owners.append(uid)
-        obj[C.EFFECTOR_OWNERS_PROP] = json.dumps(owners)
-    if skipped and report:
-        report({"WARNING"},
-               "AQS-W021: " + C.MSG["W021"].format(names=", ".join(skipped)))
+    """Obstacles come from the scene's Water Obstacles collection only
+    (core/obstacles.py): bring them in line with it."""
+    from ..core import obstacles
+    obstacles.sync(scene)
 
 
 def refresh_obstacles(scene, entry, report=None):
-    """Re-scan the scene for Collision-enabled meshes and (re)register
-    them as Mantaflow effectors for this assembly's domain.
-
-    Runs automatically before every bake: obstacles added AFTER the
-    assembly was created become real obstacles, matching the universal
-    'Collision = obstacle' rule instead of a create-time snapshot.
-
-    Also sets each of THIS assembly's effectors' surface_distance to ~1
-    voxel of this domain, so thin walls (thinner than a voxel) stop
-    leaking.  Effectors owned only by other assemblies are left alone; a
-    shared one keeps the thicker of the two values so it stays leak-proof
-    for both domains.  Returns the number of effectors this assembly owns.
-    """
-    dom = find_domain_object(entry)
-    if dom is None:
-        return 0
-    add_effectors(scene, dom, entry.uuid, report=report)
-
-    dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None)
-    ds = getattr(dmod, "domain_settings", None)
-    dx = (max(object_dims(dom)) / ds.resolution_max) \
-        if ds and ds.resolution_max > 0 else 0.05
-    thickness = min(max(dx, 0.02), 0.3)
-
-    count = 0
-    for obj in scene.objects:
-        raw = obj.get(C.EFFECTOR_OWNERS_PROP)
-        if not raw:
-            continue
-        try:
-            owners = json.loads(raw)
-        except Exception:
-            owners = []
-        if entry.uuid not in owners:
-            continue
-        shared = len(owners) > 1
-        for mod in obj.modifiers:
-            if mod.type == "FLUID" \
-                    and getattr(mod, "fluid_type", "") == "EFFECTOR":
-                es = mod.effector_settings
-                _safe(es, "use_effector", True)
-                value = thickness
-                if shared and hasattr(es, "surface_distance"):
-                    value = max(es.surface_distance, thickness)
-                _safe(es, "surface_distance", value)
-                count += 1
-    return count
+    """Runs before every bake: objects added to Water Obstacles since the
+    setup was created become obstacles, and effector thickness follows
+    this domain's voxel size.  Returns the number of obstacles."""
+    from ..core import obstacles
+    return obstacles.sync(scene)
 
 
 def mesh_has_open_edges(obj):

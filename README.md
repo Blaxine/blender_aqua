@@ -6,7 +6,7 @@ single panel with a consistent mental model:
 
 > **Level 1** is cheap and always real-time (surfaces and precipitation).
 > **Level 2** is true liquid volume (an object becomes water).
-> **Level 3** is directed liquid emission (a hose with four flow regimes).
+> **Level 3** is directed water (a real-time hose with four flow regimes).
 
 Every mode is a one-button setup. Every generated assembly is
 **reversible** (one Delete button restores your scene) and
@@ -59,7 +59,7 @@ degradation* below).
 | Falling snow (7 flake shapes) | **Create → Snow** | Press Play |
 | Turn my mesh into liquid | Select the mesh → **Still Water** | Click the red **Bake (required)** button — Level 2 is Mantaflow FLIP and must bake |
 | Real simulated rain splashing into water | **Create → Rain Sim** (a setup menu opens) | Set Angle/Direction/Speed; select a mesh and click **＋** next to *Pool meshes* — it becomes water the rain physically splashes into. Bake (Draft first!). The drops render right away; baking adds the splashes and ripples |
-| An aimable hose / jet | **Create → Water Hose** | Keyframe the cone-shaped nozzle empty; pick a regime (**Normal / Mist / Spray / Blast**). Mist is real-time; the liquid regimes must bake |
+| An aimable hose / jet | **Create → Water Hose** | Press Play — rotate or keyframe the nozzle to aim; pick a regime (**Normal / Mist / Spray / Blast**), all real-time; set **Water Color**. Add floors and walls to **Water Obstacles** so the water hits them |
 
 ## The rules AquaSuite lives by
 
@@ -74,12 +74,13 @@ degradation* below).
 - **Your data is never converted.** *Still Water* hides your source
   mesh and renders liquid in its place; delete the assembly and your
   object comes back untouched.
-- **Obstacles are universal.** Any mesh with `Physics > Collision`
-  enabled participates as an obstacle wherever the backend supports it
-  (particles bounce; Mantaflow gets automatic, reference-counted
-  Effectors that are removed cleanly when the last assembly using them
-  is deleted). AquaSuite never touches an existing user Fluid setup — such
-  objects are skipped with a warning.
+- **One place for obstacles.** Click **＋** next to *Water obstacles* in
+  any Still Water, Water Hose or Rain Sim box to add the selected objects
+  to the scene's **AQS Water Obstacles** collection: everything in it
+  blocks water in every simulation (and only what's in it — the hose
+  ignores other collision objects). Remove an object (**−**, or unlink it
+  in the Outliner) and AquaSuite takes back exactly what it added.
+  Water sources and existing user Fluid setups can't be obstacles.
 - **Quality is one switch.** The scene-wide **Preview/Final** tier
   reduces particle display and ocean resolution non-destructively;
   your authored values come back exactly when you return to Final.
@@ -92,8 +93,9 @@ degradation* below).
 
 Caches are written to `//aquasuite_cache/<assembly-id>/` **next to your
 .blend** (relative paths — render-farm friendly). Unsaved files can't
-bake; save first. Liquid modes (Still Water, hose Normal/Spray/Blast)
-show a bake button that is mandatory by nature of FLIP simulation;
+bake; save first. Liquid modes (Still Water, Rain Sim, and the hose with
+*Simulate Liquid* on) show a bake button that is mandatory by nature of
+FLIP simulation;
 Reactive Rain's ripple bake is optional but recommended before
 timeline scrubbing.
 
@@ -141,16 +143,18 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
   direction of fall.
 - Rain Sim: thin rendered raindrops fall the whole way; the liquid
   simulation only handles the splashes and ripples where they land.
-- Water Hose: aimable nozzle, four regimes, Fit Domain shrink-wraps the
-  jet's path (refits when Range or Spread changes; click it after
-  re-aiming).
+- Water Hose: an aimable, keyframable nozzle with four real-time
+  regimes — a thin Normal stream, a broken-up Spray, a fast Water Blast
+  and Mist — that hit Water Obstacles and splash along them; Water Color
+  tints it. *Simulate Liquid* (Beta) swaps the jet for a baked Mantaflow
+  liquid when you need pools.
 - If anything fails, a popup explains it in plain words and **Copy
   Report** puts a ready-to-paste bug report on your clipboard (personal
   paths removed).
 
 ## Beta modes
 
-**Still Water, Water Hose and Rain Sim are Beta.** They run Blender's
+**Still Water, Rain Sim and the hose's Simulate Liquid are Beta.** They run Blender's
 Mantaflow liquid solver, so they must be baked, bakes slow down and use
 a lot of RAM as Resolution rises, and Draft (fast) results are coarse.
 They're fully usable — just plan bake time into your shot. A short note
@@ -190,8 +194,8 @@ driver is the addon) and the Water panel is absent. Nothing errors.
 See `docs/TROUBLESHOOTING.md` (also shipped inside the addon), which
 covers the common cases: “my rain doesn't move” (press Play), “ripples
 look like squares” (raise floor detail), “Still Water does nothing”
-(it must be baked), “water leaks through my floor” (enable Collision
-physics on the floor), and more.
+(it must be baked), “water leaks through my floor” (add the floor to
+Water Obstacles), and more.
 
 ## License
 
