@@ -183,6 +183,8 @@ def _period_update(self, context):
 
 
 class AQS_AssemblyEntry(bpy.types.PropertyGroup):
+    show_advanced: BoolProperty(name='Advanced', default=False,
+        description='Show all controls for this setup')
     uuid: StringProperty()
     mode: StringProperty()
     created: StringProperty()

@@ -124,7 +124,7 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
                                    default='OCEAN_ROLLING')
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        return self.execute(context)
 
     @delete.guarded_create
     def execute(self, context):

@@ -6,7 +6,7 @@ import bpy
 from .. import constants as C
 from ..core import registry, delete, errors, bakes
 from ..core import presets, whitewater
-from . import beta
+from . import beta, control_spec
 from ..level1 import ocean as ocean_mod
 
 
@@ -280,17 +280,25 @@ def _draw_whitewater(box, entry):
 
 
 def _draw_simulated_ocean(box, entry, context):
-    _draw_preset(box, entry)
-    controls = box.column(align=True)
-    controls.enabled = not bakes.is_baking(entry)
-    controls.prop(entry, 'wave_height')
-    controls.prop(entry, 'wave_period')
-    controls.prop(entry, 'tank_size')
-    controls.prop(entry, 'draft', toggle=True)
-    _draw_fluid_settings(controls, entry)
-    _draw_whitewater(box, entry)
-    _draw_obstacles(box, context)
-    _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_fluid')
+    _draw_spec(box, context, entry)
+
+
+def _draw_spec(box, context, entry):
+    for control in control_spec.controls(entry.mode, entry.show_advanced):
+        if control.startswith('entry:'):
+            row = box.row()
+            row.enabled = not bakes.is_baking(entry)
+            row.prop(entry, control.split(':', 1)[1])
+        elif control == 'preset':
+            _draw_preset(box, entry)
+        elif control == 'fluid':
+            _draw_fluid_settings(box, entry)
+        elif control == 'whitewater':
+            _draw_whitewater(box, entry)
+        elif control == 'obstacles':
+            _draw_obstacles(box, context)
+        elif control == 'bake':
+            _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_fluid')
 
 
 def _draw_rain_sim(box, entry, context):
@@ -483,10 +491,10 @@ class AQS_PT_water(bpy.types.Panel):
             if beta.is_beta(entry.mode) or (entry.mode == C.MODE_HOSE
                                             and entry.hose_liquid):
                 header.label(text="Beta", icon="EXPERIMENTAL")
-            header.label(text=f"AQS_A_{entry.uuid[:8]}")
+            header.prop(entry, 'show_advanced', text='', icon='PREFERENCES', toggle=True)
             op = header.operator("aquasuite.assembly_delete", text="", icon="TRASH")
             op.uuid = entry.uuid
-            if registry.is_pre_release(entry):
+            if entry.show_advanced and registry.is_pre_release(entry):
                 _draw_pre_release(box, entry)
 
             try:
