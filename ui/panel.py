@@ -63,6 +63,10 @@ def _draw_ocean(box, context, entry):
         ident = ocean_mod._socket_identifier(mod, name)
         if ident:
             colm.prop(mod, f'["{ident}"]', text=name)
+    _draw_floaters(box, entry)
+
+
+def _draw_floaters(box, entry):
     row = box.row()
     row.label(text=f"Buoys: {len(entry.buoys)}")
     op = row.operator("aquasuite.ocean_attach_buoy", text="", icon="ADD")
@@ -76,7 +80,7 @@ def _draw_ocean(box, context, entry):
         op.buoy_index = i
 
 
-def _draw_particles(box, entry, label="Particles"):
+def _draw_particles(box, entry, fields=('count', 'lifetime', 'particle_size')):
     obj = entry.primary
     psys = obj.particle_systems[0] if obj and obj.particle_systems else None
     if psys is None:
@@ -91,9 +95,8 @@ def _draw_particles(box, entry, label="Particles"):
         return
     ps = psys.settings
     colm = box.column(align=True)
-    colm.prop(ps, "count", text="Count")
-    colm.prop(ps, "lifetime", text="Lifetime")
-    colm.prop(ps, "particle_size", text="Size")
+    for name in fields:
+        colm.prop(ps, name, text={'count': 'Count', 'lifetime': 'Lifetime', 'particle_size': 'Size'}[name])
 
 
 RES_PRESETS_UI = (
@@ -152,6 +155,13 @@ class AQS_OT_set_resolution(bpy.types.Operator):
             return {"CANCELLED"}
         entry.base_resolution = self.resolution  # update callback applies it
         return {"FINISHED"}
+
+
+def _draw_resolution_buttons(box, entry):
+    row = box.row(align=True)
+    for label, res, _desc in RES_PRESETS_UI:
+        op = row.operator('aquasuite.set_resolution', text=label, depress=entry.base_resolution == res)
+        op.uuid, op.resolution = entry.uuid, res
 
 
 def _draw_fluid_settings(box, entry):
@@ -288,7 +298,37 @@ def _draw_spec(box, context, entry):
         if control.startswith('entry:'):
             row = box.row()
             row.enabled = not bakes.is_baking(entry)
-            row.prop(entry, control.split(':', 1)[1])
+            name = control.split(':', 1)[1]
+            labels = {'rain_density': 'Drop Amount', 'rain_speed': 'Speed', 'rain_angle': 'Angle', 'hose_color': 'Water Color'}
+            row.prop(entry, name, **({'text': labels[name]} if name in labels else {}))
+        elif control.startswith('ocean:'):
+            name = control.split(':', 1)[1]
+            mod = ocean_mod.find_ocean_modifier(entry.primary, entry.uuid)
+            ident = ocean_mod._socket_identifier(mod, name) if mod else None
+            if ident:
+                box.prop(mod, f'["{ident}"]', text=name)
+        elif control.startswith('particles:'):
+            _draw_particles(box, entry, (control.split(':', 1)[1],))
+        elif control == 'floaters':
+            _draw_floaters(box, entry)
+        elif control == 'resolution_buttons':
+            _draw_resolution_buttons(box, entry)
+        elif control == 'ripples':
+            _draw_bake(box, entry, 'aquasuite.bake_ripples', mandatory=False)
+        elif control == 'regimes':
+            _draw_regimes(box, entry)
+        elif control == 'hose_liquid_controls':
+            _draw_hose_liquid(box, entry, context)
+        elif control == 'pools':
+            row = box.row(align=True)
+            row.label(text=f'Pool meshes: {len(entry.pool_sources)}')
+            row.operator('aquasuite.rain_sim_add_pool', text='', icon='ADD').uuid = entry.uuid
+            if entry.show_advanced:
+                for rec in entry.pool_sources:
+                    box.label(text=rec.obj.name if rec.obj else '<missing>')
+        elif control == 'rain_tools':
+            for op_id, label in (('rain_sim_rebuild_emitter', 'Rebuild Emitter'), ('rain_sim_optimize', 'Optimize Visible Rain'), ('rain_sim_check', 'Check Pool Link'), ('rain_sim_fit_domain', 'Fit Domain')):
+                box.operator('aquasuite.' + op_id, text=label).uuid = entry.uuid
         elif control == 'preset':
             _draw_preset(box, entry)
         elif control == 'fluid':
@@ -381,6 +421,15 @@ def _draw_obstacles(box, context):
 
 
 def _draw_hose(box, entry, context):
+    _draw_regimes(box, entry)
+    colm = box.column(align=True)
+    for name in ('pressure', 'spread', 'nozzle_radius', 'hose_color'):
+        colm.prop(entry, name)
+    _draw_obstacles(box, context)
+    _draw_hose_liquid(box, entry, context)
+
+
+def _draw_regimes(box, entry):
     row = box.row(align=True)
     for rid, label, _desc in C.REGIME_ITEMS:
         op = row.operator("aquasuite.hose_set_regime",
@@ -388,12 +437,9 @@ def _draw_hose(box, entry, context):
                           depress=(entry.regime == rid))
         op.uuid = entry.uuid
         op.regime = rid
-    colm = box.column(align=True)
-    colm.prop(entry, "pressure")
-    colm.prop(entry, "spread")
-    colm.prop(entry, "nozzle_radius")
-    colm.prop(entry, "hose_color")
-    _draw_obstacles(box, context)
+
+
+def _draw_hose_liquid(box, entry, context):
     if entry.regime == C.REGIME_MIST:
         return
     row = box.row(align=True)
@@ -450,8 +496,10 @@ class AQS_PT_water(bpy.types.Panel):
         scene = context.scene
 
         layout.prop(scene, "aqs_quality", text="Quality")
+        entries = registry.entries(scene)
+        advanced = control_spec.advanced_visible(entries)
         from ..core import memory
-        low, high = memory.scene_allowance(scene)
+        low, high = memory.scene_allowance(scene) if advanced else (0, 0)
         if high:
             layout.label(text=f'Liquid total: {low:.2f}–{high:.2f} GB planning allowance')
             layout.label(text='Excludes other geometry, rendering and Blender overhead')
@@ -477,7 +525,7 @@ class AQS_PT_water(bpy.types.Panel):
         entries = registry.entries(scene)
         if not entries:
             return
-        if any(e.mode in presets.LIQUID_MODES and
+        if advanced and any(e.mode in presets.LIQUID_MODES and
                (e.mode != C.MODE_HOSE or e.hose_liquid) for e in entries):
             layout.operator('aquasuite.setup_render_layers', icon='RENDERLAYERS')
         layout.separator()
@@ -508,6 +556,9 @@ class AQS_PT_water(bpy.types.Panel):
                 errors.schedule()
 
     def _draw_entry(self, box, context, entry):
+        if entry.mode in control_spec.SIMPLE:
+            _draw_spec(box, context, entry)
+            return
         if entry.mode == C.MODE_OCEAN:
             _draw_ocean(box, context, entry)
         elif entry.mode in (C.MODE_RAIN, C.MODE_SNOW):

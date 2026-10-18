@@ -323,7 +323,7 @@ class AQS_OT_hose_create(bpy.types.Operator):
                                    default='HOSE_GARDEN')
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        return self.execute(context)
 
     def draw(self, context):
         self.layout.prop(self, 'simulate_liquid')

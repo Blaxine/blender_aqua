@@ -217,5 +217,8 @@ def guarded_create(execute):
             quality.apply_tier(context.scene)
             from ..ui import beta
             beta.notify_created(context.scene.aqs_assemblies[-1].mode)
+            from .presets import LIQUID_MODES
+            if context.scene.aqs_assemblies[-1].mode in LIQUID_MODES:
+                self.report({'INFO'}, 'Change the look in the setup box')
         return result
     return wrapper

@@ -159,7 +159,7 @@ class AQS_OT_still_water_create(bpy.types.Operator):
                                    default='STILL_CALM')
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        return self.execute(context)
 
     @classmethod
     def poll(cls, context):

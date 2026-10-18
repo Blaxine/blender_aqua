@@ -679,7 +679,7 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
         description="Compass heading of the tilt (degrees)")
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=320)
+        return self.execute(context)
 
     @delete.guarded_create
     def execute(self, context):

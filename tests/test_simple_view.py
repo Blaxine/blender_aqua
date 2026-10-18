@@ -7,6 +7,18 @@ import bpy
 from aquasuite.ui import control_spec
 
 
+def test_all_modes_and_one_click():
+    lib.check('spec covers all modes', set(control_spec.SIMPLE) == set(lib.C.MODE_LABELS))
+    for operator in ('still_water_create', 'rain_sim_create', 'hose_create'):
+        if operator == 'still_water_create':
+            lib.make_active(lib.add_cube())
+        result = getattr(bpy.ops.aquasuite, operator)('INVOKE_DEFAULT')
+        lib.check(operator + ' invokes immediately', result == {'FINISHED'})
+    lib.check('all Simple hides advanced panel controls', not control_spec.advanced_visible(lib.scene().aqs_assemblies))
+    lib.scene().aqs_assemblies[0].show_advanced = True
+    lib.check('one Advanced enables panel controls', control_spec.advanced_visible(lib.scene().aqs_assemblies))
+
+
 def test_spec_and_default():
     for mode, simple in control_spec.SIMPLE.items():
         lib.check(mode + ': Simple included in Advanced', set(simple) <= set(control_spec.ADVANCED[mode]))
