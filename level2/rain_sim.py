@@ -187,7 +187,8 @@ def _drop_tree(uid, droplet_mat):
             ("Emit Only", "NodeSocketBool", False),
             ("Emit Start", "NodeSocketFloat", 0.0),
             ("Emit Window", "NodeSocketFloat", 1.0 / 24.0),
-            ("Splash Fraction", "NodeSocketFloat", 1.0)):
+            ("Splash Fraction", "NodeSocketFloat", 1.0),
+            ("Viewport Fraction", "NodeSocketFloat", 1.0)):
         sock = iface.new_socket(name, in_out="INPUT", socket_type=stype)
         sock.default_value = default
 
@@ -196,7 +197,17 @@ def _drop_tree(uid, droplet_mat):
 
     dist = nt.nodes.new("GeometryNodeDistributePointsOnFaces")
     nt.links.new(gin.outputs["Geometry"], dist.inputs["Mesh"])
-    nt.links.new(gin.outputs["Density"], dist.inputs["Density"])
+    viewport = nt.nodes.new('GeometryNodeIsViewport')
+    fraction = nt.nodes.new('GeometryNodeSwitch')
+    fraction.input_type = 'FLOAT'
+    fraction.inputs['False'].default_value = 1.0
+    nt.links.new(viewport.outputs[0], fraction.inputs['Switch'])
+    nt.links.new(gin.outputs['Viewport Fraction'], fraction.inputs['True'])
+    density = nt.nodes.new('ShaderNodeMath')
+    density.operation = 'MULTIPLY'
+    nt.links.new(gin.outputs['Density'], density.inputs[0])
+    nt.links.new(fraction.outputs[0], density.inputs[1])
+    nt.links.new(density.outputs[0], dist.inputs['Density'])
     nt.links.new(gin.outputs["Seed"], dist.inputs["Seed"])
 
     rand = nt.nodes.new("FunctionNodeRandomValue")     # per-point phase
@@ -303,7 +314,11 @@ def _drop_tree(uid, droplet_mat):
 
     inst = nt.nodes.new("GeometryNodeInstanceOnPoints")
     nt.links.new(keep.outputs["Geometry"], inst.inputs["Points"])
-    nt.links.new(ico.outputs["Mesh"], inst.inputs["Instance"])
+    setmat = nt.nodes.new('GeometryNodeSetMaterial')
+    if droplet_mat is not None:
+        setmat.inputs['Material'].default_value = droplet_mat
+    nt.links.new(ico.outputs['Mesh'], setmat.inputs['Geometry'])
+    nt.links.new(setmat.outputs['Geometry'], inst.inputs['Instance'])
     nt.links.new(align.outputs[0], inst.inputs["Rotation"])
 
     scale = nt.nodes.new("GeometryNodeScaleInstances")
@@ -315,10 +330,11 @@ def _drop_tree(uid, droplet_mat):
     real = nt.nodes.new("GeometryNodeRealizeInstances")
     nt.links.new(scale.outputs["Instances"], real.inputs["Geometry"])
 
-    setmat = nt.nodes.new("GeometryNodeSetMaterial")
-    if droplet_mat is not None:
-        setmat.inputs["Material"].default_value = droplet_mat
-    nt.links.new(real.outputs["Geometry"], setmat.inputs["Geometry"])
+    output = nt.nodes.new('GeometryNodeSwitch')
+    output.input_type = 'GEOMETRY'
+    nt.links.new(gin.outputs['Emit Only'], output.inputs['Switch'])
+    nt.links.new(scale.outputs['Instances'], output.inputs['False'])
+    nt.links.new(real.outputs['Geometry'], output.inputs['True'])
 
     # Plane outline (edges only) so the emitter can be seen and selected.
     outline = nt.nodes.new("GeometryNodeDeleteGeometry")
@@ -328,7 +344,7 @@ def _drop_tree(uid, droplet_mat):
 
     join = nt.nodes.new("GeometryNodeJoinGeometry")
     nt.links.new(outline.outputs["Geometry"], join.inputs["Geometry"])
-    nt.links.new(setmat.outputs["Geometry"], join.inputs["Geometry"])
+    nt.links.new(output.outputs["Output"], join.inputs["Geometry"])
     nt.links.new(join.outputs["Geometry"], gout.inputs["Geometry"])
 
     for idx, node in enumerate(nt.nodes):
@@ -462,6 +478,19 @@ def apply_quality(context, entry):
         dom.display_type = "TEXTURED"
     tune_drop_size(entry)
     whitewater.apply(entry)
+    apply_viewport_quality(entry, entry.id_data.aqs_quality == 'PREVIEW')
+
+
+def apply_viewport_quality(entry, preview):
+    """Only the visible rain is thinned; emission and renders stay authored."""
+    obj = find_rain_drops(entry)
+    mod = _drops_modifier(obj, entry.uuid) if obj else None
+    if mod is not None:
+        from ..level1 import ocean as gn_io
+        # Existing node trees without this socket keep their saved behavior.
+        if gn_io.get_input(mod, 'Viewport Fraction') is not None:
+            gn_io.set_input(mod, 'Viewport Fraction', 0.25 if preview else 1.0)
+            obj.update_tag()
 
 
 SPLASH_HEADROOM = 0.6   # metres of air above the water for splash crowns
@@ -966,6 +995,47 @@ class AQS_OT_rain_sim_fit_domain(bpy.types.Operator):
         return {"FINISHED"}
 
 
-CLASSES = (AQS_OT_rain_sim_create, AQS_OT_rain_sim_add_pool,
+class AQS_OT_rain_sim_optimize(bpy.types.Operator):
+    bl_idname = 'aquasuite.rain_sim_optimize'
+    bl_label = 'Optimize Visible Rain'
+    bl_description = 'Replace the visible rain node tree with instanced drops and viewport Preview support; keeps the simulation emitter'
+    bl_options = {'REGISTER', 'UNDO'}
+    uuid: bpy.props.StringProperty()
+
+    def execute(self, context):
+        from ..core import bakes
+        entry = registry.get(context.scene, self.uuid)
+        if entry is None or bakes.is_baking(entry):
+            return {'CANCELLED'}
+        obj = find_rain_drops(entry)
+        mod = _drops_modifier(obj, entry.uuid) if obj else None
+        if mod is None or is_legacy_tree(mod):
+            raise RuntimeError('Rebuild the legacy rain emitter first.')
+        if gn_io.get_input(mod, 'Viewport Fraction') is not None:
+            return {'FINISHED'}
+        old = mod.node_group
+        values = {s.name: gn_io.get_input(mod, s.name) for s in old.interface.items_tree
+                  if s.item_type == 'SOCKET' and s.in_out == 'INPUT' and s.name != 'Geometry'}
+        mat = next((n.inputs['Material'].default_value for n in old.nodes
+                    if n.type == 'SET_MATERIAL'), None)
+        new = _drop_tree(entry.uuid, mat)
+        try:
+            mod.node_group = new
+            for name, value in values.items():
+                if value is not None:
+                    gn_io.set_input(mod, name, value)
+            apply_viewport_quality(entry, context.scene.aqs_quality == 'PREVIEW')
+        except Exception:
+            mod.node_group = old
+            if new.users == 0:
+                bpy.data.node_groups.remove(new)
+            raise
+        if old.users == 0 and naming.owned_by(old, entry.uuid):
+            bpy.data.node_groups.remove(old)
+        self.report({'INFO'}, 'Visible rain optimized; simulation emitter unchanged')
+        return {'FINISHED'}
+
+
+CLASSES = (AQS_OT_rain_sim_optimize, AQS_OT_rain_sim_create, AQS_OT_rain_sim_add_pool,
            AQS_OT_rain_sim_rebuild_emitter, AQS_OT_rain_sim_check,
            AQS_OT_rain_sim_fit_domain)

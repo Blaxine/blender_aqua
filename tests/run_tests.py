@@ -71,7 +71,13 @@ def run_file(blender, test_file, bake, workdir):
             results.append((parts[0], parts[1] if len(parts) > 1 else "?",
                             parts[2] if len(parts) > 2 else ""))
     if returncode not in (None, 0):
-        results.append(("FAIL", "Blender process exited unsuccessfully", str(returncode)))
+        if done and blender.get("known_exit_crash"):
+            # Opt-in per Blender (config): a crash while quitting AFTER every
+            # check reported is shown, not failed (Blender 4.1 + Mantaflow).
+            results.append(("SKIP", "known crash on exit",
+                            f"exit {returncode} after DONE (known_exit_crash)"))
+        else:
+            results.append(("FAIL", "Blender process exited unsuccessfully", str(returncode)))
     if done and not results:
         results.append(("FAIL", "test file produced no results", "DONE without PASS, FAIL or SKIP"))
     if not done:

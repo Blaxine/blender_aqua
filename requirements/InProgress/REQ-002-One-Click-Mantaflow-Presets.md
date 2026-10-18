@@ -4,13 +4,13 @@
 | ----- | ----- |
 | ID | REQ-002 |
 | Title | One-Click Mantaflow Presets |
-| Status | Implementation preview — manual review and automated validation pending |
+| Status | InProgress |
 | Phase | Post-1.0 feature (can land before launch) |
 | Tier | Major feature |
 | Area | Liquid modes (Still Water, Rain Sim, hose Simulate Liquid), new Ocean (Simulated) mode, panel, render setup |
 | Author | Blaxine |
 | Created | 2026-10-17 |
-| Last Updated | 2026-10-17 |
+| Last Updated | 2026-10-18 |
 
 > Builds on REQ-001 (setup stamp, error pipeline, Water Obstacles, bake buttons, test runner).
 
@@ -42,6 +42,9 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 - **Whitewater cost (measured, 1 m cube, res 64, 24 frames, 5.1):** bake 5.5 s → 7.3 s, cache 39 MB → 70 MB with all three on; splashy scenes reach 2–4×.
 - **Particles render only if the instancer renders** (the hose bug fixed in REQ-001): the domain must stay renderable for whitewater to show.
 - **All solver settings this plan touches exist on 4.1 and 5.1:** `use_viscosity`, `viscosity_value/base/exponent`, `use_flip_particles`, `flip_ratio`, `particle_radius`, `particle_randomness`, `surface_tension`, `use_diffusion`, `use_collision_border_*`, effector `effector_type/use_effector/subframes/use_plane_init/surface_distance`, the `sndparticle_*` set, view-layer `use_pass_cryptomatte_*`, `ViewLayer.aovs`, `ShaderNodeOutputAOV`.
+- **Mantaflow removes a whitewater particle system without lowering its settings' user count** (it stays 1): orphan detection must check whether any particle system still references the settings.
+- **Ocean waves need cells of about 12 cm or less** (measured, 20 × 8 × 4 m tank): at Draft resolution 48 (42 cm cells) Calm and Rolling Waves read only as settling slosh; at resolution 160 Calm stays within 0.07 m and Rolling builds to ~0.4 m. A 160 tank is ~0.33 M cells.
+- **Blender 4.1 crashes on exit after Mantaflow bakes** (access violation in `python311.dll`, also with v0.16.1), after every check has reported.
 - **Draft forces secondary particles off today** (hose `apply_regime`, Rain Sim `apply_quality`); hose regimes Spray and Normal/Blast also write secondaries from `C.REGIME_PARAMS`.
 - **Compatibility promise (REQ-001):** from 1.0 no update changes a saved setup; new settings must default to today's behaviour on old setups.
 
@@ -110,12 +113,12 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S001 | F | Preset catalogue (one entry) | A module holding preset packages as data; first entry Still Water "Splashy" (resolution, solver values, foam on with Amount/Size). | — | new preset module under `level2/` or `core/` |
-|  | S002 | P | Preset + whitewater settings | Entry settings: last-applied preset id, modified flag, per-element on/Amount/Size; defaults = no preset, whitewater read from the domain. | S001 | `core/registry.py` |
-|  | S003 | S | Apply preset | Applies a package to a setup's domain (through `set_flag`), records the preset id, clears "modified". | S002 | `level2/still_water.py` |
-|  | S004 | S | Whitewater render setup | For each enabled element: tagged instance object + material, `render_type = "OBJECT"`, size from Size; re-applied after every enable; orphaned settings datablocks removed. | S003 | `level2/still_water.py`, `materials/mats.py` |
-|  | S005 | U | Preset at Create + in the box | Still Water Create gets a Preset property (default Calm Pour placeholder until Slice 3; Splashy selectable); the box shows Preset dropdown + Apply and the current name. | S003 | `level2/still_water.py`, `ui/panel.py` |
-|  | S006 | T | Tracer tests (new) | Splashy applies (values, preset id); after a `--bake` the Foam system exists, is `OBJECT` with an instance, and has alive particles. | S004, S005 | new `tests/test_presets.py` |
+| ✅ | S001 | F | Preset catalogue (one entry) | A module holding preset packages as data; first entry Still Water "Splashy" (resolution, solver values, foam on with Amount/Size). | — | new preset module under `level2/` or `core/` |
+| ✅ | S002 | P | Preset + whitewater settings | Entry settings: last-applied preset id, modified flag, per-element on/Amount/Size; defaults = no preset, whitewater read from the domain. | S001 | `core/registry.py` |
+| ✅ | S003 | S | Apply preset | Applies a package to a setup's domain (through `set_flag`), records the preset id, clears "modified". | S002 | `level2/still_water.py` |
+| ✅ | S004 | S | Whitewater render setup | For each enabled element: tagged instance object + material, `render_type = "OBJECT"`, size from Size; re-applied after every enable; orphaned settings datablocks removed. | S003 | `level2/still_water.py`, `materials/mats.py` |
+| ✅ | S005 | U | Preset at Create + in the box | Still Water Create gets a Preset property (default Calm Pour placeholder until Slice 3; Splashy selectable); the box shows Preset dropdown + Apply and the current name. | S003 | `level2/still_water.py`, `ui/panel.py` |
+| ✅ | S006 | T | Tracer tests (new) | Splashy applies (values, preset id); after a `--bake` the Foam system exists, is `OBJECT` with an instance, and has alive particles. | S004, S005 | new `tests/test_presets.py` |
 
 ### Slice 2 — Whitewater controls everywhere
 
@@ -124,11 +127,11 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S007 | S | Whitewater apply | One routine writes on/off + derived `sndparticle_*` from Amount, and render setup from Size, for any liquid setup; Draft suspends (checkboxes kept). | S004 | `level2/still_water.py` |
-|  | S008 | S | Hook all liquid modes | Rain Sim `apply_quality` and hose `apply_regime` stop writing secondaries directly and call the whitewater routine; hose regimes seed whitewater defaults. | S007 | `level2/rain_sim.py`, `level3/hose.py`, `constants.py` |
-|  | S009 | U | Whitewater section | Three rows (checkbox, Amount, Size) in each liquid box; greyed when off; "Off while Draft is on" note. | S007 | `ui/panel.py` |
-|  | S010 | P | Old setups | Whitewater settings initialise from the domain's current flags for setups made before this change; preset shows "Custom". | S002 | `core/registry.py`, `level2/still_water.py` |
-|  | S011 | T | Whitewater tests (new/extend) | Independent toggles per mode; off → no Spray/Foam/Bubbles systems; Draft suspends and restores; off/on keeps render setup; extend the Spray-regime check in `tests/test_liquids.py` (regime seeds, checkboxes own afterwards). | S008, S010 | `tests/test_presets.py`, `tests/test_liquids.py` |
+| ✅ | S007 | S | Whitewater apply | One routine writes on/off + derived `sndparticle_*` from Amount, and render setup from Size, for any liquid setup; Draft suspends (checkboxes kept). | S004 | `level2/still_water.py` |
+| ✅ | S008 | S | Hook all liquid modes | Rain Sim `apply_quality` and hose `apply_regime` stop writing secondaries directly and call the whitewater routine; hose regimes seed whitewater defaults. | S007 | `level2/rain_sim.py`, `level3/hose.py`, `constants.py` |
+| ✅ | S009 | U | Whitewater section | Three rows (checkbox, Amount, Size) in each liquid box; greyed when off; "Off while Draft is on" note. | S007 | `ui/panel.py` |
+| ✅ | S010 | P | Old setups | Whitewater settings initialise from the domain's current flags for setups made before this change; preset shows "Custom". | S002 | `core/registry.py`, `level2/still_water.py` |
+| ✅ | S011 | T | Whitewater tests (new/extend) | Independent toggles per mode; off → no Spray/Foam/Bubbles systems; Draft suspends and restores; off/on keeps render setup; extend the Spray-regime check in `tests/test_liquids.py` (regime seeds, checkboxes own afterwards). | S008, S010 | `tests/test_presets.py`, `tests/test_liquids.py` |
 
 ### Slice 3 — The other eight liquid presets
 
@@ -137,9 +140,9 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S012 | S | Liquid presets | Still Water Calm Pour, Thick (viscosity on); Rain Sim Drizzle, Rain, Storm (density, speed, splash amount, whitewater); hose Garden, Fire Hose, Sprinkler (regime, pressure, spread, whitewater). | S008 | preset module |
-|  | S013 | U | Preset at Create for every liquid mode | Create operators of Rain Sim and the hose (Simulate Liquid) gain the Preset property; defaults Rain / Garden; Still Water default Calm Pour. | S012 | `level2/rain_sim.py`, `level3/hose.py`, `level2/still_water.py` |
-|  | S014 | S | "Modified" marker | Editing a preset-owned setting sets the flag; Apply clears it. | S012 | `core/registry.py` |
+| ✅ | S012 | S | Liquid presets | Still Water Calm Pour, Thick (viscosity on); Rain Sim Drizzle, Rain, Storm (density, speed, splash amount, whitewater); hose Garden, Fire Hose, Sprinkler (regime, pressure, spread, whitewater). | S008 | preset module |
+| ✅ | S013 | U | Preset at Create for every liquid mode | Create operators of Rain Sim and the hose (Simulate Liquid) gain the Preset property; defaults Rain / Garden; Still Water default Calm Pour. | S012 | `level2/rain_sim.py`, `level3/hose.py`, `level2/still_water.py` |
+| ✅ | S014 | S | "Modified" marker | Editing a preset-owned setting sets the flag; Apply clears it. | S012 | `core/registry.py` |
 |  | S015 | T | Preset tests (new) | Each preset applies cleanly; `--bake` low-res bake per preset produces liquid; modified flag behaviour; existing create/delete tests still pass. | S013, S014 | `tests/test_presets.py`, `tests/test_bakes.py` |
 
 ### Slice 4 — Render layers
@@ -149,10 +152,10 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S016 | S | Per-element materials + AOV outputs | Liquid and each whitewater element use distinct materials, each writing its own AOV. | S007 | `materials/mats.py`, `level2/still_water.py` |
-|  | S017 | S | Set Up Render Layers | Scene action: enable Material Cryptomatte and add the four AOVs on the active view layer; idempotent; reports what changed. | S016 | new operator in `ui/` or `core/` |
-|  | S018 | U | Button | "Set Up Render Layers" in the Water panel once any liquid setup exists. | S017 | `ui/panel.py` |
-|  | S019 | T | Render-layer tests (new) | Passes and AOVs enabled after the action, unchanged on a second run; element materials distinct. | S017 | new test file |
+| ✅ | S016 | S | Per-element materials + AOV outputs | Liquid and each whitewater element use distinct materials, each writing its own AOV. | S007 | `materials/mats.py`, `level2/still_water.py` |
+| ✅ | S017 | S | Set Up Render Layers | Scene action: enable Material Cryptomatte and add the four AOVs on the active view layer; idempotent; reports what changed. | S016 | new operator in `ui/` or `core/` |
+| ✅ | S018 | U | Button | "Set Up Render Layers" in the Water panel once any liquid setup exists. | S017 | `ui/panel.py` |
+| ✅ | S019 | T | Render-layer tests (new) | Passes and AOVs enabled after the action, unchanged on a second run; element materials distinct. | S017 | new test file |
 
 ### Slice 5 — Ocean (Simulated) tracer
 
@@ -161,11 +164,11 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S020 | F | New mode | Mode constant, label, icon; Beta (`ui/beta.py`); registered with create/delete, bake buttons, Cancel Bake, obstacles row. | S007 | `constants.py`, `ui/beta.py` |
-|  | S021 | S | Tank build | Domain box, tagged water-block mesh with one-shot geometry flow, walls colliding, Draft/Resolution like other liquids, bake cache under `//aquasuite_cache/<id>`. | S020 | new module under `level2/` |
-|  | S022 | S | Wave paddle | Tagged paddle effector at one end with a sine F-Curve modifier on its location (Wave Height → amplitude, Wave Period → period); enough subframes. | S021 | new module |
-|  | S023 | U | Ocean box | Create button "Ocean (Simulated) · Beta"; box with Wave Height, Wave Period, Tank Size, Draft/Resolution, Water obstacles, Bake. | S022 | `ui/panel.py` |
-|  | S024 | T | Ocean tests (new/extend) | Create/delete leaves nothing tagged; `--bake` produces liquid whose surface height varies along the tank; obstacle inside the tank gets an effector; extend `tests/test_create_delete.py` and `tests/test_beta.py`. | S023 | new test file, `tests/test_create_delete.py`, `tests/test_beta.py` |
+| ✅ | S020 | F | New mode | Mode constant, label, icon; Beta (`ui/beta.py`); registered with create/delete, bake buttons, Cancel Bake, obstacles row. | S007 | `constants.py`, `ui/beta.py` |
+| ✅ | S021 | S | Tank build | Domain box, tagged water-block mesh with one-shot geometry flow, walls colliding, Draft/Resolution like other liquids, bake cache under `//aquasuite_cache/<id>`. | S020 | new module under `level2/` |
+| ✅ | S022 | S | Wave paddle | Tagged paddle effector at one end with a sine F-Curve modifier on its location (Wave Height → amplitude, Wave Period → period); enough subframes. | S021 | new module |
+| ✅ | S023 | U | Ocean box | Create button "Ocean (Simulated) · Beta"; box with Wave Height, Wave Period, Tank Size, Draft/Resolution, Water obstacles, Bake. | S022 | `ui/panel.py` |
+| ✅ | S024 | T | Ocean tests (new/extend) | Create/delete leaves nothing tagged; `--bake` produces liquid whose surface height varies along the tank; obstacle inside the tank gets an effector; extend `tests/test_create_delete.py` and `tests/test_beta.py`. | S023 | new test file, `tests/test_create_delete.py`, `tests/test_beta.py` |
 
 ### Slice 6 — Ocean presets, whitewater and layers
 
@@ -174,8 +177,8 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S025 | S | Ocean presets | Calm / Rolling Waves / Storm Surf: wave height, period, tank size, resolution, whitewater. | S022, S012 | preset module |
-|  | S026 | S | Ocean whitewater + layers | Ocean uses the whitewater routine and per-element materials. | S025, S016 | ocean module |
+| ✅ | S025 | S | Ocean presets | Calm / Rolling Waves / Storm Surf: wave height, period, tank size, resolution, whitewater. | S022, S012 | preset module |
+| ✅ | S026 | S | Ocean whitewater + layers | Ocean uses the whitewater routine and per-element materials. | S025, S016 | ocean module |
 |  | S027 | T | Ocean preset tests (new) | Each preset applies; `--bake` wave amplitude ordering Calm < Rolling < Storm; Storm Surf has whitewater systems. | S026 | ocean test file |
 
 ### Slice 7 — Docs and release
@@ -185,9 +188,9 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
-|  | S028 | D | User docs | README (what's in this version, Beta modes), troubleshooting (whitewater not rendering, slow bakes, ocean RAM), public README. | S027 | `README.md`, `docs/TROUBLESHOOTING.md`, `public_repo/README.md` |
-|  | S029 | D | Thesaurus terms | Add: Preset, Whitewater (Spray / Foam / Bubbles), Render Layers, Ocean (Simulated), Wave Paddle. | S028 | `docs/THESAURUS.md` |
-|  | S030 | D | Release checklist | In-app steps: each preset bakes, whitewater renders in Cycles and EEVEE, render layers separate in the compositor, ocean waves hit an obstacle, old scene opens unchanged. | S028 | `docs/RELEASE_CHECKLIST.md` |
+| ✅ | S028 | D | User docs | README (what's in this version, Beta modes), troubleshooting (whitewater not rendering, slow bakes, ocean RAM), public README. | S027 | `README.md`, `docs/TROUBLESHOOTING.md`, `public_repo/README.md` |
+| ✅ | S029 | D | Thesaurus terms | Add: Preset, Whitewater (Spray / Foam / Bubbles), Render Layers, Ocean (Simulated), Wave Paddle. | S028 | `docs/THESAURUS.md` |
+| ✅ | S030 | D | Release checklist | In-app steps: each preset bakes, whitewater renders in Cycles and EEVEE, render layers separate in the compositor, ocean waves hit an obstacle, old scene opens unchanged. | S028 | `docs/RELEASE_CHECKLIST.md` |
 
 ### Dependency graph
 
@@ -227,9 +230,10 @@ S025 → S026 (+S016) → S027 → S028 → S029
 - [x] **Q1 — Preset model.** Editable starting points; scenes store values, never live presets. *(Blaxine)*
 - [x] **Q2 — Render layers.** Cryptomatte material mattes + AOVs, no extra view layers. *(Blaxine)*
 - [x] **Q3 — Ocean waves.** Wave paddle in a tank. *(Blaxine)*
-- [ ] **Q4 — Renamed whitewater systems.** If a user renames `Spray`/`Foam`/`Bubbles`, AquaSuite can't find them. Detect-and-warn or ignore? Deferred until Slice 2 is in a real scene and the rename case is tried.
+- [x] **Q4 — Resolved.** Systems are found by Mantaflow's names only on first discovery, then tagged; an unidentifiable renamed system shows a warning asking to restore its name. *(Blaxine)*
 - [ ] **Q5 — Preset values.** Exact numbers per preset (resolution, viscosity, wave height/period, whitewater amounts). Deferred to tuning during Slices 3 and 6, judged from in-app renders.
-- [ ] **Q6 — Ocean tank default size.** 20 × 8 × 4 m is the working assumption; deferred until the Slice 5 tracer shows RAM and bake time at Draft and Final.
+- [x] **Q6 — Resolved.** Tank stays 20 × 8 × 4 m; Calm and Rolling Waves ship at resolution 160 with Draft off (~0.33 M cells). *(Blaxine)*
+- [ ] **Q7 — Storm Surf decay.** Its baked crest-to-trough peaks at ~1.2 m around frame 48 and falls to ~0.2 m by frame 96 while the paddle keeps moving. Breaking waves, or lost paddle forcing? Deferred until the in-app visual review of Storm Surf.
 
 ## Smoke Test
 
@@ -271,3 +275,6 @@ Nothing here is built. Each entry names the alternative, then why it lost.
 | Date | Author | Summary of Change |
 | ---- | ------ | ----------------- |
 | 2026-10-17 | Blaxine | Initial plan. |
+| 2026-10-17 | Fabio Lopez | Implemented Slices 1–7 (commit f257622, v0.17.2): presets, whitewater, render layers, Ocean (Simulated); registration hardening; regression tests. |
+| 2026-10-18 | Fabio Lopez | 0.18.0 efficiency pass (uncommitted at review): instanced visible rain, Preview rain fraction, write-only-on-change, scoped preset-edit detection, Generation Budget, planning memory allowance. |
+| 2026-10-18 | Blaxine | Review fixes: Calm/Rolling ocean presets to resolution 160 (Draft off); whitewater settings no longer leak on toggle-off; stale tests updated (Beta modes, instanced rain streaks, 4.1-only import, opt-in known exit crash); new tests `test_presets.py`, `test_whitewater.py`, `test_simulated_ocean.py`; docs at 0.18.0. S015 (bake per preset) and S027 (baked Calm < Rolling < Storm) stay open; Q7 added. |

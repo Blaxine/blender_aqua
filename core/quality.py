@@ -24,20 +24,27 @@ def _tagged_particles(scene):
             yield ps
 
 
+def apply_particle_tier(scene, ps):
+    if scene.aqs_quality == 'PREVIEW':
+        if C.AUTHORED_PROP not in ps.keys():
+            ps[C.AUTHORED_PROP] = float(ps.display_percentage)
+        value = min(25, int(ps[C.AUTHORED_PROP]))
+        if ps.display_percentage != value:
+            ps.display_percentage = value
+    elif C.AUTHORED_PROP in ps.keys():
+        ps.display_percentage = int(ps[C.AUTHORED_PROP])
+        del ps[C.AUTHORED_PROP]
+
+
 def apply_tier(scene):
     preview = scene.aqs_quality == "PREVIEW"
-
     for ps in _tagged_particles(scene):
-        if preview:
-            if C.AUTHORED_PROP not in ps.keys():
-                ps[C.AUTHORED_PROP] = float(ps.display_percentage)
-            ps.display_percentage = 25
-        else:
-            if C.AUTHORED_PROP in ps.keys():
-                ps.display_percentage = int(ps[C.AUTHORED_PROP])
-                del ps[C.AUTHORED_PROP]
+        apply_particle_tier(scene, ps)
 
     for entry in scene.aqs_assemblies:
+        if entry.mode == C.MODE_SIMRAIN:
+            from ..level2 import rain_sim
+            rain_sim.apply_viewport_quality(entry, preview)
         if entry.mode != C.MODE_OCEAN or entry.primary is None:
             continue
         obj = entry.primary

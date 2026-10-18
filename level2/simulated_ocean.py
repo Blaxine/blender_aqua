@@ -83,6 +83,22 @@ def apply_settings(context, entry):
     for key in curve.keyframe_points:
         key.co.y = paddle.location.x
         key.interpolation = 'CONSTANT'
+    apply_period(entry)
+    whitewater.apply(entry)
+    dom.update_tag()
+    paddle.update_tag()
+
+
+def apply_period(entry):
+    """Update timing/subframes without touching geometry or liquid settings."""
+    dom, ds = presets.domain(entry)
+    paddle = _part(entry, 'paddle')
+    if dom is None or ds is None or paddle is None:
+        raise RuntimeError('The wave tank is incomplete. Recreate this setup.')
+    scene = presets.scene_for(entry)
+    amplitude = min(entry.wave_height * 0.5, entry.tank_size[0] * 0.08)
+    dx = max(entry.tank_size) / max(ds.resolution_max, 1)
+    curve = _paddle_curve(paddle, entry)
     modifier = next((m for m in curve.modifiers if m.type == 'FNGENERATOR'), None)
     if modifier is None:
         modifier = curve.modifiers.new('FNGENERATOR')
@@ -96,8 +112,6 @@ def apply_settings(context, entry):
     effector = next(m.effector_settings for m in paddle.modifiers if m.type == 'FLUID')
     effector.use_effector = True
     effector.subframes = min(8, max(2, math.ceil(amplitude * 2 * math.pi / entry.wave_period / (dx * fps))))
-    whitewater.apply(entry)
-    dom.update_tag()
     paddle.update_tag()
 
 

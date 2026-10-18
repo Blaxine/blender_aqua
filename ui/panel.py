@@ -197,8 +197,13 @@ def _draw_fluid_settings(box, entry):
         mcells, gb = memory_estimate(dom, eff)
         sub = box.row()
         sub.alert = gb > 2.0
-        sub.label(text=f"≈ {mcells:.1f} M cells · est. {gb:.1f} GB RAM",
+        sub.label(text=f"≈ {mcells:.1f} M cells · grid only {gb:.2f} GB",
                   icon="ERROR" if gb > 2.0 else "MEMORY")
+        from ..core import memory
+        allowance = memory.assembly(entry)
+        sub = box.row()
+        sub.alert = allowance['high'] > 2.0
+        sub.label(text=f"Liquid allowance {allowance['low']:.2f}–{allowance['high']:.2f} GB (uncalibrated)")
 
     row = colm.row(align=True)
     row.prop(ds, "cache_frame_start", text="Bake Start")
@@ -240,7 +245,7 @@ def _draw_preset(box, entry):
     col = box.column(align=True)
     col.enabled = not bakes.is_baking(entry)
     label = entry.preset_label or 'Custom'
-    if presets.is_modified(entry):
+    if entry.preset_modified:
         label += ' (modified)'
     col.label(text=label, icon='PRESET')
     row = col.row(align=True)
@@ -255,6 +260,8 @@ def _draw_whitewater(box, entry):
     col = box.column(align=True)
     col.enabled = not bakes.is_baking(entry)
     col.label(text='Whitewater')
+    col.prop(entry, 'ww_budget')
+    col.label(text='Amount: relative density; Budget: shared generation')
     if entry.draft and entry.ww_managed:
         col.label(text='Off while Draft is on', icon='INFO')
     if not entry.ww_managed:
@@ -301,6 +308,14 @@ def _draw_rain_sim(box, entry, context):
     if gnmod is not None:
         drops = box.column(align=True)
         drops.label(text="Drops", icon="MOD_FLUIDSIM")
+        from ..level2.rain_sim import find_rain_drops
+        visible = find_rain_drops(entry)
+        visible_mod = _drops_modifier(visible, entry.uuid) if visible else None
+        if visible_mod and not legacy and ocean_mod.get_input(visible_mod, 'Viewport Fraction') is None:
+            upgrade = drops.row()
+            upgrade.enabled = not bakes.is_baking(entry)
+            op = upgrade.operator('aquasuite.rain_sim_optimize', icon='MOD_PARTICLES')
+            op.uuid = entry.uuid
         drops.prop(entry, "rain_density")
         drops.prop(entry, "drop_size")
         drops.prop(entry, "splash_amount")
@@ -427,6 +442,11 @@ class AQS_PT_water(bpy.types.Panel):
         scene = context.scene
 
         layout.prop(scene, "aqs_quality", text="Quality")
+        from ..core import memory
+        low, high = memory.scene_allowance(scene)
+        if high:
+            layout.label(text=f'Liquid total: {low:.2f}–{high:.2f} GB planning allowance')
+            layout.label(text='Excludes other geometry, rendering and Blender overhead')
 
         create = layout.box()
         create.label(text="Create", icon="ADD")

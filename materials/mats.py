@@ -161,7 +161,8 @@ def element_aov(mat, element, value_socket=None):
         node.aov_name = AOV_NAMES[element]
     else:
         node.name = AOV_NAMES[element]  # older 4.x API
-    node.inputs['Value'].default_value = 1.0
+    if node.inputs['Value'].default_value != 1.0:
+        node.inputs['Value'].default_value = 1.0
     if value_socket is not None:
         nt.links.new(value_socket, node.inputs['Value'])
 
@@ -200,6 +201,31 @@ def whitewater(mode, uuid_, element):
 
 
 def whitewater_amount(mat, fraction):
-    for node in mat.node_tree.nodes:
+    nt = mat.node_tree
+    for node in nt.nodes:
         if node.get('aqs_amount'):
-            node.inputs[1].default_value = max(0.0, min(1.0, fraction))
+            value = max(0.0, min(1.0, fraction))
+            if node.inputs[1].default_value != value:
+                node.inputs[1].default_value = value
+            # Full-density elements need neither random thinning nor a
+            # transparent closure. Keep the branch available for later edits.
+            mix = next((l.to_node for l in node.outputs[0].links
+                        if l.to_node.type == 'MIX_SHADER'), None)
+            if mix and mix.inputs[2].links:
+                shader = mix.inputs[2].links[0].from_node
+                target = shader.outputs[0] if value >= 1.0 else mix.outputs[0]
+                for out in nt.nodes:
+                    if out.type == 'OUTPUT_MATERIAL':
+                        socket = out.inputs['Surface']
+                        if socket.links and socket.links[0].from_node in (mix, shader):
+                            if socket.links[0].from_socket != target:
+                                nt.links.new(target, socket)
+            for out in nt.nodes:
+                if out.type == 'OUTPUT_AOV' and out.get('aqs_aov_element'):
+                    socket = out.inputs['Value']
+                    if value >= 1.0:
+                        for link in list(socket.links):
+                            if link.from_node == node:
+                                nt.links.remove(link)
+                    elif not socket.links:
+                        nt.links.new(node.outputs[0], socket)

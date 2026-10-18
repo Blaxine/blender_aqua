@@ -22,6 +22,12 @@ Copy `tests/blender_paths.example.json` to `tests/blender_paths.local.json`
 Release testing uses Blender 5.1. Keep an older Blender (4.1) listed too: the
 automated suite is the only check on older versions.
 
+`"known_exit_crash": true` on a Blender entry reports a crash **while quitting
+after every check reported** as a skip instead of a failure. Blender 4.1 crashes
+on exit after Mantaflow bakes (an access violation in `python311.dll`, also with
+v0.16.1), so the example config sets it for 4.1 only. A crash before the checks
+finish still fails.
+
 ## Running
 
 ```

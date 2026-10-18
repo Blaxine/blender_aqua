@@ -69,8 +69,8 @@ def _resolution_update(self, context):
         if ds is not None:
             ds.resolution_max = (max(16, self.base_resolution // 2)
                                  if self.ww_managed and self.draft else self.base_resolution)
-    from . import whitewater
-    whitewater.apply(self)
+        from . import whitewater
+        whitewater.apply(self)
     presets.note_edit(self)
 
 
@@ -161,6 +161,27 @@ def _tank_update(self, context):
     presets.note_edit(self)
 
 
+@errors.guard_update("AquaSuite couldn't resize whitewater")
+def _whitewater_size_update(self, context):
+    if presets.busy(self):
+        return
+    from . import whitewater
+    if not self.ww_managed:
+        _whitewater_update(self, context)
+    else:
+        whitewater.apply_sizes(self)
+        presets.note_edit(self)
+
+
+@errors.guard_update("AquaSuite couldn't update the wave period")
+def _period_update(self, context):
+    if presets.busy(self) or self.mode != C.MODE_SIMOCEAN:
+        return
+    from ..level2 import simulated_ocean
+    simulated_ocean.apply_period(self)
+    presets.note_edit(self)
+
+
 class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     uuid: StringProperty()
     mode: StringProperty()
@@ -179,6 +200,8 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     ww_initialized: BoolProperty(default=False)
     ww_managed: BoolProperty(default=False)
     ww_warning: StringProperty(default="")
+    ww_budget: FloatProperty(name="Generation Budget", default=1.0, min=0.0, max=1.0,
+        update=_whitewater_update, description="Cap shared whitewater generation. Lower to reduce simulation work; re-bake. Zero disables all secondaries without clearing choices")
     ww_spray: BoolProperty(name="Spray", update=_whitewater_update)
     ww_foam: BoolProperty(name="Foam", update=_whitewater_update)
     ww_bubbles: BoolProperty(name="Bubbles", update=_whitewater_update)
@@ -189,15 +212,15 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     ww_bubbles_amount: FloatProperty(name="Amount", default=0.5, min=0, max=1,
         update=_whitewater_update, description="Bubble amount; re-bake to update. Zero suspends this element")
     ww_spray_size: FloatProperty(name="Size", default=0.012, min=0.0001, soft_max=0.1,
-        subtype='DISTANCE', update=_whitewater_update, description="Spray radius in metres; re-bake after changing whitewater")
+        subtype='DISTANCE', update=_whitewater_size_update, description="Spray render radius in metres")
     ww_foam_size: FloatProperty(name="Size", default=0.018, min=0.0001, soft_max=0.1,
-        subtype='DISTANCE', update=_whitewater_update, description="Foam radius in metres; re-bake after changing whitewater")
+        subtype='DISTANCE', update=_whitewater_size_update, description="Foam render radius in metres")
     ww_bubbles_size: FloatProperty(name="Size", default=0.009, min=0.0001, soft_max=0.1,
-        subtype='DISTANCE', update=_whitewater_update, description="Bubble radius in metres; re-bake after changing whitewater")
+        subtype='DISTANCE', update=_whitewater_size_update, description="Bubble render radius in metres")
     wave_height: FloatProperty(name="Wave Height", default=0.45, min=0.01, max=2.0,
         subtype='DISTANCE', update=_tank_update, description="Paddle stroke scale; final wave height depends on depth and bake resolution")
     wave_period: FloatProperty(name="Wave Period", default=2.4, min=0.5, max=12.0,
-        update=_tank_update, description="Seconds per paddle cycle")
+        update=_period_update, description="Seconds per paddle cycle")
     tank_size: FloatVectorProperty(name="Tank Size", size=3, default=(20, 8, 4),
         min=2.0, max=100.0, subtype='XYZ', update=_tank_update)
     # Still Water restore records (source visibility policy §7.1.2/7.1.3)

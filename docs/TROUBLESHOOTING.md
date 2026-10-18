@@ -82,7 +82,7 @@
   completes; set that one field manually in the physics panel and
   please report your Blender version.
 
-## Presets, whitewater and the simulated ocean (0.17.0 preview)
+## Presets, whitewater and the simulated ocean (0.18.0 preview)
 
 - **No foam/spray/bubbles:** turn Draft off, enable the element and set Amount
   above zero, then re-bake. The domain must remain visible to renders. Do not hide

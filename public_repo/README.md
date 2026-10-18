@@ -40,10 +40,10 @@ Have a request? Open an issue with the **Feature request** template.
 
 ## Compatibility promise
 
-The 0.17.0 implementation preview adds twelve liquid presets, per-element
+The 0.18.0 preview adds twelve liquid presets, per-element
 Spray/Foam/Bubbles controls, Material Cryptomatte and AOV setup, and a simulated
-wave tank. Visual tuning and acceptance checks are still pending; this text does
-not announce a validated release. Existing setups remain Custom until the user
+wave tank. Automated checks cover them; the in-app visual review is still
+pending, so this text does not announce a validated release. Existing setups remain Custom until the user
 chooses to adopt the new controls.
 
 From 1.0, updates never change or break setups in your saved files.

@@ -130,6 +130,6 @@ MSG = {
              "or lower Resolution / use Draft to raise the limit."),
     "W021": ("These objects were kept out of the liquid simulation because they already "
              "have a Fluid setup: {names}."),
-    "W022": ("Estimated grid is {gb:.1f} GB — Blender can run out of memory. "
+    "W022": ("Scene liquid planning allowance is {gb:.1f} GB (uncalibrated; excludes rendering). "
              "Reduce Area, Resolution, or fit the domain tighter."),
 }

@@ -55,6 +55,19 @@ def test_particle_rain_straight_and_angled():
                   f"mean |cos| {mean:.3f} over {n} drops")
 
 
+def _instance_axes(obj):
+    """Long (local Z, streak-scaled) axis of each instanced drop of obj."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    axes = []
+    for inst in dg.object_instances:
+        if inst.is_instance and inst.parent is not None                 and inst.parent.original == obj:
+            m = inst.matrix_world.to_3x3()
+            z = m @ Vector((0, 0, 1))
+            if z.length > 1e-9:
+                axes.append(z.normalized())
+    return axes
+
+
 def _drop_axes(obj):
     """Long axis of each realized drop: one connected 12-vertex piece per
     drop (the loose 4-vertex plane outline is skipped)."""
@@ -95,7 +108,8 @@ def test_rain_sim_streaks():
     lib.scene().frame_set(12)
     bpy.context.view_layer.update()
     drops = rain_sim.find_rain_drops(lib.entry(u))
-    axes = _drop_axes(drops)
+    # Visible drops are instances; older trees realized them into mesh.
+    axes = _instance_axes(drops) or _drop_axes(drops)
     vertical = sum(abs(a.z) for a in axes) / max(len(axes), 1)
     lib.check("Rain Sim straight rain: vertical streaks", axes and vertical > 0.99,
               f"mean |z| {vertical:.3f} over {len(axes)} drops")
@@ -106,7 +120,8 @@ def test_rain_sim_streaks():
     v, _g, t_fall, v_hit = rain_sim.rain_timing(lib.entry(u), lib.scene())
     rel, hit = v.normalized(), v_hit.normalized()
     span = math.degrees(rel.angle(hit)) + 5.0
-    axes = _drop_axes(rain_sim.find_rain_drops(lib.entry(u)))
+    drops = rain_sim.find_rain_drops(lib.entry(u))
+    axes = _instance_axes(drops) or _drop_axes(drops)
     ok = [a for a in axes
           if max(math.degrees(a.angle(rel)), math.degrees((-a).angle(rel))) >= 0
           and min(math.degrees(a.angle(rel)), math.degrees((-a).angle(rel))) <= span

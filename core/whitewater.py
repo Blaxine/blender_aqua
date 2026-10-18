@@ -75,8 +75,25 @@ def _instance(entry, element):
     return obj
 
 
-def apply(entry):
+def _set(obj, name, value):
+    if getattr(obj, name) != value:
+        setattr(obj, name, value)
+
+
+def apply_sizes(entry):
+    from .presets import domain
+    dom, ds = domain(entry)
+    if ds is None:
+        return
+    for element in ELEMENTS:
+        for system in _systems(dom, entry, element):
+            _set(system.settings, 'particle_size', getattr(entry, 'ww_' + element + '_size'))
+
+
+def apply(entry, force=False):
     from . import presets
+    if presets.busy(entry) and not force:
+        return  # Preset application performs one final update after all writes.
     from ..level2.still_water import set_flag
     from ..materials import mats
     initialize(entry)
@@ -85,7 +102,7 @@ def apply(entry):
     dom, ds = presets.domain(entry)
     if ds is None:
         return
-    active = {e: bool(getattr(entry, 'ww_' + e)) and not entry.draft
+    active = {e: bool(getattr(entry, 'ww_' + e)) and not entry.draft and entry.ww_budget > 0
               and getattr(entry, 'ww_' + e + '_amount') > 0 for e in ELEMENTS}
     from . import render_layers
     render_layers.setup_materials(entry)
@@ -94,6 +111,7 @@ def apply(entry):
         return
     # Names are needed only for first discovery; our role tag survives renames.
     missing = []
+    removed_settings = []
     for element in ELEMENTS:
         old = _systems(dom, entry, element)
         was_on = bool(getattr(ds, FLAGS[element]))
@@ -102,7 +120,10 @@ def apply(entry):
             continue  # Do not guess which renamed legacy system is ours.
         for system in old:
             naming.tag(system.settings, entry.mode, entry.uuid)
-            system.settings[ROLE] = element
+            if system.settings.get(ROLE) != element:
+                system.settings[ROLE] = element
+            if was_on and not active[element]:
+                removed_settings.append(system.settings)
         set_flag(ds, FLAGS[element], active[element])
         systems = _systems(dom, entry, element)
         if active[element] and not systems:
@@ -111,35 +132,46 @@ def apply(entry):
         for system in systems:
             ps = system.settings
             naming.tag(ps, entry.mode, entry.uuid)
-            ps[ROLE] = element
+            if ps.get(ROLE) != element:
+                ps[ROLE] = element
             obj = _instance(entry, element)
-            ps.render_type = 'OBJECT'
-            ps.instance_object = obj
-            ps.particle_size = getattr(entry, 'ww_' + element + '_size')
-            ps.size_random = 0.4
-    # Remove only orphan settings we identified before the toggle.
-    for ps in list(bpy.data.particles):
-        if ps.users == 0 and naming.owned_by(ps, entry.uuid) and ps.get(ROLE) in ELEMENTS:
-            bpy.data.particles.remove(ps)
+            _set(ps, 'render_type', 'OBJECT')
+            _set(ps, 'instance_object', obj)
+            _set(ps, 'particle_size', getattr(entry, 'ww_' + element + '_size'))
+            _set(ps, 'size_random', 0.4)
+            from . import quality
+            quality.apply_particle_tier(presets.scene_for(entry), ps)
+    # Remove only orphan settings we identified before the toggle.  Mantaflow
+    # deletes the particle system without lowering the settings' user count
+    # (it stays 1), so "unused" means no particle system references it.
+    if removed_settings:
+        referenced = {p.settings for o in bpy.data.objects for p in o.particle_systems
+                      if p.settings is not None}
+        for ps in removed_settings:
+            if ps not in referenced and naming.owned_by(ps, entry.uuid)                     and ps.get(ROLE) in ELEMENTS:
+                bpy.data.particles.remove(ps)
     amounts = {e: getattr(entry, 'ww_' + e + '_amount') if active[e] else 0.0 for e in ELEMENTS}
-    amount = max(amounts.values())
+    maximum = max(amounts.values())
+    amount = min(maximum, entry.ww_budget)
     if amount > 0:
         # Mantaflow has one spawn budget for all elements. Per-element
         # deterministic shader thinning below supplies independent Amount.
-        ds.sndparticle_potential_min_wavecrest = 2.5 * (1.0 - amount)
-        ds.sndparticle_potential_max_wavecrest = 8.0 - 5.0 * amount
-        ds.sndparticle_potential_min_trappedair = 5.0 * (1.0 - amount)
-        ds.sndparticle_potential_max_trappedair = 20.0 - 12.0 * amount
-        ds.sndparticle_potential_min_energy = 1.0 - 0.9 * amount
-        ds.sndparticle_potential_max_energy = 5.0 - 3.0 * amount
-        ds.sndparticle_sampling_wavecrest = max(1, round(200 * amount))
-        ds.sndparticle_sampling_trappedair = max(1, round(40 * amount))
+        values = dict(sndparticle_potential_min_wavecrest=2.5 * (1.0 - amount),
+                      sndparticle_potential_max_wavecrest=8.0 - 5.0 * amount,
+                      sndparticle_potential_min_trappedair=5.0 * (1.0 - amount),
+                      sndparticle_potential_max_trappedair=20.0 - 12.0 * amount,
+                      sndparticle_potential_min_energy=1.0 - 0.9 * amount,
+                      sndparticle_potential_max_energy=5.0 - 3.0 * amount,
+                      sndparticle_sampling_wavecrest=max(1, round(200 * amount)),
+                      sndparticle_sampling_trappedair=max(1, round(40 * amount)))
+        for name, value in values.items():
+            _set(ds, name, value)
     for element in ELEMENTS:
         if active[element]:
             obj = _instance(entry, element)
             for mat in obj.data.materials:
                 if mat and naming.owned_by(mat, entry.uuid):
-                    mats.whitewater_amount(mat, amounts[element] / max(amount, 1e-6))
+                    mats.whitewater_amount(mat, amounts[element] / max(maximum, 1e-6))
     entry.ww_warning = ('Cannot identify ' + ', '.join(missing)
                         + '. Restore the original particle-system names, then edit Whitewater again.') if missing else ''
 

@@ -1,4 +1,7 @@
-# 0.17.2 manual review
+# Preset manual review (current preview: 0.18.0)
+
+The efficiency changes and their focused verification are documented in
+`PERFORMANCE_REVIEW.md`. The bake/render acceptance steps below remain applicable.
 
 0.17.2 adds rollback after failed registration and cleanup of partial
 registration before retrying with the same loaded classes. It also prevents
@@ -9,9 +12,11 @@ classes/modules left in memory by earlier builds.
 fixing the `_RestrictData` / `scenes` error when enabling the extension.
 Restart Blender before installing this build if a previous enable attempt failed.
 
-Implementation preview, not a validated release. Run your manual checks first;
-we will return to automated functional checks afterwards. The earlier 0.16.1
-test totals do not validate this feature.
+Implementation preview, not a validated release. Automated functional checks
+now cover the features (`tests/test_presets.py`, `tests/test_whitewater.py`,
+`tests/test_simulated_ocean.py`; run with `--bake`); the visual review below is
+still required. 0.18.0 also raises Calm and Rolling Waves to resolution 160
+(Draft off): at Draft resolution 48 a cell is 42 cm, larger than their waves.
 
 1. Install the preview ZIP in Blender 5.1. Open Water and confirm the new Ocean
    (Simulated) Create button. Keep an untouched copy of your old scenes.

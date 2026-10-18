@@ -1,6 +1,13 @@
 {
   "blenders": [
-    {"name": "5.1", "path": "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"},
-    {"name": "4.1", "path": "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe"}
+    {
+      "name": "5.1",
+      "path": "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"
+    },
+    {
+      "name": "4.1",
+      "path": "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe",
+      "known_exit_crash": true
+    }
   ]
 }

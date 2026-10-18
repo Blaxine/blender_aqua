@@ -2,6 +2,7 @@
 """One-shot liquid presets. Saved setups retain values, never live recipes."""
 import contextlib
 import json
+from functools import lru_cache
 
 import bpy
 from bpy.app.handlers import persistent
@@ -15,7 +16,7 @@ _applying = set()
 
 def _package(mode, label, resolution=96, draft=True, foam=0.0, spray=0.0,
              bubbles=0.0, viscosity=0.0, flip=0.97, tension=0.0, **values):
-    props = dict(base_resolution=resolution, draft=draft,
+    props = dict(base_resolution=resolution, draft=draft, ww_budget=1.0,
                  ww_spray=spray > 0, ww_foam=foam > 0, ww_bubbles=bubbles > 0,
                  ww_spray_amount=spray or 0.5, ww_foam_amount=foam or 0.5,
                  ww_bubbles_amount=bubbles or 0.5,
@@ -48,9 +49,13 @@ CATALOG = {
     'HOSE_SPRINKLER': _package(C.MODE_HOSE, 'Sprinkler', draft=False, spray=0.55,
                               foam=0.25, regime='SPRAY', pressure=0.5,
                               spread=25.0, nozzle_radius=0.025, hose_liquid=True),
-    'OCEAN_CALM': _package(C.MODE_SIMOCEAN, 'Calm', wave_height=0.12,
+    # Calm and Rolling need ~12 cm cells: at Draft resolution 48 a cell is
+    # 42 cm, larger than the waves (measured: both read as settling slosh).
+    'OCEAN_CALM': _package(C.MODE_SIMOCEAN, 'Calm', resolution=160, draft=False,
+                          wave_height=0.12,
                           wave_period=3.5, tank_size=(20.0, 8.0, 4.0)),
-    'OCEAN_ROLLING': _package(C.MODE_SIMOCEAN, 'Rolling Waves', wave_height=0.45,
+    'OCEAN_ROLLING': _package(C.MODE_SIMOCEAN, 'Rolling Waves', resolution=160,
+                             draft=False, wave_height=0.45,
                              wave_period=2.4, tank_size=(20.0, 8.0, 4.0)),
     'OCEAN_STORM': _package(C.MODE_SIMOCEAN, 'Storm Surf', resolution=160, draft=False,
                            spray=0.8, foam=0.85, bubbles=0.4, wave_height=0.9,
@@ -112,12 +117,19 @@ def snapshot(entry, fields):
             for kind, names in fields.items()}
 
 
+@lru_cache(maxsize=256)
+def _decoded_snapshot(encoded):
+    return json.loads(encoded)
+
+
 def is_modified(entry):
+    if entry.preset_modified:
+        return True
     if not entry.preset_id or not entry.preset_snapshot:
         return False
     try:
-        saved = json.loads(entry.preset_snapshot)
-        return entry.preset_modified or snapshot(entry, saved) != saved
+        saved = _decoded_snapshot(entry.preset_snapshot)
+        return snapshot(entry, saved) != saved
     except (ValueError, TypeError):
         return True
 
@@ -131,20 +143,38 @@ def note_edit(entry):
 def on_depsgraph(scene, _depsgraph=None):
     # Catch edits made in Blender's Physics panel as well as our callbacks.
     # Compare with saved values, not the current catalogue definitions.
+    changed = ({u.id.original.as_pointer() for u in _depsgraph.updates}
+               if _depsgraph is not None else None)
     for entry in getattr(scene, 'aqs_assemblies', []):
         if entry.preset_id and not entry.preset_modified:
+            obj, _ds = domain(entry)
+            if changed is not None and scene.as_pointer() not in changed and (
+                    obj is None or obj.as_pointer() not in changed):
+                continue
             note_edit(entry)
+
+
+@persistent
+def reset_cache(_dummy=None):
+    _decoded_snapshot.cache_clear()
 
 
 def register():
     if on_depsgraph not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(on_depsgraph)
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if reset_cache not in handlers:
+            handlers.append(reset_cache)
 
 
 def unregister():
     if on_depsgraph in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(on_depsgraph)
     _applying.clear()
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if reset_cache in handlers:
+            handlers.remove(reset_cache)
+    reset_cache()
 
 
 def apply(context, entry, preset_id):
@@ -184,7 +214,7 @@ def apply(context, entry, preset_id):
                 set_flag(ds, name, value)
             else:
                 setattr(ds, name, value)
-        whitewater.apply(entry)
+        whitewater.apply(entry, force=True)
         fields = {'entry': list(package['entry']), 'domain': list(package['domain']) + [
             'resolution_max', 'mesh_scale', 'use_spray_particles', 'use_foam_particles',
             'use_bubble_particles', 'sndparticle_sampling_wavecrest',

@@ -210,7 +210,7 @@ def get_input(mod, name):
 
 def set_input(mod, name, value):
     ident = _socket_identifier(mod, name)
-    if ident is not None:
+    if ident is not None and get_input(mod, name) != value:
         mod[ident] = value
         mod.id_data.update_tag()
 

@@ -89,7 +89,16 @@ degradation* below).
   AquaSuite clamps it and tells you what to change to go further — the
   hose panel shows a red notice for as long as the jet is being slowed.
 
-## 0.17.0 preview: liquid presets and whitewater
+## 0.18.0 efficiency preview
+
+Visible Rain Sim drops now stay instanced, Preview can reduce visible rain
+without reducing rendered density, and settings updates avoid redundant work.
+Whitewater has a shared **Generation Budget**; Size edits affect appearance only.
+Existing Rain Sim setups can opt into **Optimize Visible Rain**.
+See [performance changes and checks](docs/PERFORMANCE_REVIEW.md) for details,
+memory-estimate limitations, and the remaining visual review.
+
+## Liquid presets and whitewater
 
 This implementation is ready for manual review; preset appearance, whitewater
 renders and wave-tank behaviour still need acceptance checks. Automated functional

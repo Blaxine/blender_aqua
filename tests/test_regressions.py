@@ -133,6 +133,12 @@ def test_preview_creation_and_reapplication():
 def drop_centers(obj, frame):
     lib.scene().frame_set(frame)
     bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    instances = sorted((tuple(i.persistent_id), i.matrix_world.translation.x)
+                       for i in depsgraph.object_instances if i.is_instance
+                       and i.parent and i.parent.original == obj)
+    if instances:
+        return [x for _id, x in instances]
     bm = bmesh.new()
     bm.from_mesh(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
     bm.verts.ensure_lookup_table()

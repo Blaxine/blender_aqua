@@ -4,3 +4,4 @@ __pycache__/
 aquasuite_cache/
 *.zip
 tests/blender_paths.local.json
+tests/*.log

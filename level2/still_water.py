@@ -256,14 +256,9 @@ MEMORY_CONFIRM_GB = 2.0
 
 
 def estimated_memory_gb(entry):
-    """RAM estimate from the ACTUAL fitted domain and effective resolution
-    — the honest number, not a resolution rule of thumb."""
-    from .rain_sim import memory_estimate
-    dom = find_domain_object(entry)
-    dmod = next((m for m in dom.modifiers if m.type == "FLUID"), None) \
-        if dom else None
-    res = dmod.domain_settings.resolution_max if dmod else 0
-    return memory_estimate(dom, res)[1]
+    """Upper planning allowance; includes other active liquid assemblies."""
+    from ..core import memory, presets
+    return memory.scene_allowance(presets.scene_for(entry))[1]
 
 
 @contextlib.contextmanager

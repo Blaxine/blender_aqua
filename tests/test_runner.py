@@ -26,6 +26,23 @@ def test_process_results():
         lib.check(name, any(r[0] == 'FAIL' for r in results) == failure, str(results))
 
 
+def test_known_exit_crash_opt_in():
+    proc = SimpleNamespace(returncode=11, stderr='',
+                           stdout='AQS_TEST| PASS | check |\nAQS_TEST| DONE\n')
+    with patch.object(runner.subprocess, 'run', return_value=proc):
+        flagged = runner.run_file({'path': 'fake', 'known_exit_crash': True},
+                                  'fake.py', False, lib.WORKDIR)
+    lib.check('known exit crash after DONE is a skip, not a failure',
+              not any(r[0] == 'FAIL' for r in flagged)
+              and any(r[0] == 'SKIP' for r in flagged), str(flagged))
+    proc.stdout = 'AQS_TEST| PASS | check |\n'          # crashed before DONE
+    with patch.object(runner.subprocess, 'run', return_value=proc):
+        early = runner.run_file({'path': 'fake', 'known_exit_crash': True},
+                                'fake.py', False, lib.WORKDIR)
+    lib.check('a crash before DONE still fails with the opt-in',
+              any(r[0] == 'FAIL' for r in early), str(early))
+
+
 def test_timeout_after_done():
     exc = runner.subprocess.TimeoutExpired('fake', 300,
                                          output=b'AQS_TEST| DONE\n')

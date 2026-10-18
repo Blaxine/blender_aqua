@@ -22,7 +22,9 @@ def owner_tag(mode, assembly_uuid):
 
 def tag(id_block, mode, assembly_uuid):
     """Stamp any ID datablock as owned by an assembly."""
-    id_block[C.OWNER_PROP] = owner_tag(mode, assembly_uuid)
+    value = owner_tag(mode, assembly_uuid)
+    if id_block.get(C.OWNER_PROP) != value:
+        id_block[C.OWNER_PROP] = value
     return id_block
 
 
