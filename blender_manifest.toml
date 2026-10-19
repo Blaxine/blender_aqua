@@ -4,7 +4,7 @@ schema_version = "1.0.0"
 # version (read at runtime by constants.ADDON_VERSION).
 
 id = "aquasuite"
-version = "0.18.0"
+version = "0.19.0"
 name = "AquaSuite — Water FX"
 tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
 maintainer = "AquaSuite"

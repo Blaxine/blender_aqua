@@ -74,3 +74,23 @@ Version under test: `________`  Date: `________`
 - [ ] Changelog written; README "What's in this version" updated
 - [ ] Zip uploaded to the store page (never to a public GitHub release)
 - [ ] Public repo README/roadmap updated if anything changed
+# REQ-003 beginner gate — not yet run
+
+This gate requires real participants; automated tests are not a substitute.
+Recruit **3–5 Blender beginners** and record their Blender version, experience,
+date, and whether the session is in person or a screen share. No sessions have
+been performed as part of this implementation.
+
+- [ ] Each participant creates one liquid and one real-time effect without help.
+- [ ] Each adjusts the look using Simple controls and finds Advanced if needed.
+- [ ] Each saves, bakes when necessary, adds lighting and renders without help.
+- [ ] Record time-to-first-result, assistance requested, errors and confusing labels.
+- [ ] Every blocker has a linked fix and retest or a logged release decision.
+- [ ] Visual review of all twelve presets in Cycles/EEVEE is complete.
+- [ ] Storm Surf sustain and Calm < Rolling < Storm bake gates pass.
+- [ ] UI/window smoke checks pass in actual Blender 4.2+ and 5.x sessions.
+
+| Participant | Version / experience | Tasks and observations | Blocker / fix link | Retest |
+| --- | --- | --- | --- | --- |
+| Pending | | | | |
+

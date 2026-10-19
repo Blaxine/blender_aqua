@@ -51,6 +51,21 @@ degradation* below).
 
 ## Quick start
 
+Setups open in **Simple** view. Click the gear-shaped **Advanced** toggle in a
+setup's header for all controls; each box remembers its choice. Create buttons
+build immediately with their default look. Use Preset in the box, or Blender's
+Adjust Last Operation panel (F9) immediately after creation, to change options.
+
+Try **Load Demo** for a separate, lit real-time scene: press Play to see an ocean
+floater, rain and a hose hitting a wall. Your original scene remains in the
+scene selector. You can delete the demo scene there when finished.
+
+If water is hard to see, choose **Add Water Lighting**. It adds an owned sky and
+sun and adjusts supported water render settings. Delete that lighting assembly
+to restore the previous world and changed settings. Use Rendered shading; in
+Material Preview, enable Scene World and Scene Lights to see the actual setup.
+Memory information and Set Up Render Layers appear while any box is Advanced.
+
 | I want… | Do this | Then |
 |---|---|---|
 | A believable ocean | **Create → Ocean** | Press Play. Select your boat, click **＋** next to *Buoys* — it bobs and tilts on the swell, deterministically (farm-safe, no bake needed) |
@@ -58,7 +73,7 @@ degradation* below).
 | Rain with impact ripples | **Create → Reactive Rain** | Press Play; use **Bake Ripples** before scrubbing the timeline |
 | Falling snow (7 flake shapes) | **Create → Snow** | Press Play |
 | Turn my mesh into liquid | Select the mesh → **Still Water** | Click the red **Bake (required)** button — Level 2 is Mantaflow FLIP and must bake |
-| Real simulated rain splashing into water | **Create → Rain Sim** (a setup menu opens) | Set Angle/Direction/Speed; select a mesh and click **＋** next to *Pool meshes* — it becomes water the rain physically splashes into. Bake (Draft first!). The drops render right away; baking adds the splashes and ripples |
+| Real simulated rain splashing into water | **Create → Rain Sim** | Pick a preset; adjust Drop Amount, Speed and Angle. Select a mesh and click **＋** next to *Pool meshes*, then save and Bake. Advanced holds Draft, resolution and other settings |
 | An aimable hose / jet | **Create → Water Hose** | Press Play — rotate or keyframe the nozzle to aim; pick a regime (**Normal / Mist / Spray / Blast**), all real-time; set **Water Color**. Add floors and walls to **Water Obstacles** so the water hits them |
 
 ## The rules AquaSuite lives by

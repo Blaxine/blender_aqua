@@ -111,3 +111,22 @@
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.
+# Beginner workflow (0.19.0 preview)
+
+- **Water is invisible or looks like glass:** add Water Lighting, then use
+  Rendered shading. Material Preview normally uses its own environment; enable
+  Scene World and Scene Lights to see the added sky and sun. Liquid modes still
+  need a saved file and a bake. Lighting does not generate liquid or add a camera.
+- **Controls disappeared:** each setup defaults to Simple. Click its Advanced
+  gear for whitewater, resolution details, bake range and specialist settings.
+  Memory information and Set Up Render Layers require at least one Advanced box.
+- **Create did not ask for options:** this is intentional. Change the preset in
+  the setup box or open Adjust Last Operation (F9) immediately after creating.
+- **A second Water Lighting cannot be added:** each scene permits one. Adjust
+  its Sun Strength/Angle, or Delete it before creating another. Delete restores
+  the saved previous world and every recorded scene setting, even if you edited
+  those settings while Water Lighting was active.
+- **Demo did not switch scenes:** choose AquaSuite Demo in Blender's scene
+  selector. Background/script builds create the scene without switching a window.
+  The demo uses only real-time effects; no liquid bake is needed.
+

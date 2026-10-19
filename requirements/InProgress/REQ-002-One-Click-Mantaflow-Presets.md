@@ -1,5 +1,11 @@
 # REQ-002 — One-Click Mantaflow Presets
 
+> 2026-10-18 hand-over: S015 (per-preset bake coverage), S027 (baked ocean
+> ordering/sustain), Q5 (visual tuning) and Q7 (Storm Surf decay) are tracked by
+> REQ-003 S019–S023. Twelve low-resolution presence-of-liquid bakes now pass on
+> Blender 5.1.2. Visual tuning and the Storm Surf fix remain open; this transfer
+> does not mark their acceptance criteria complete.
+
 | Field | Value |
 | ----- | ----- |
 | ID | REQ-002 |

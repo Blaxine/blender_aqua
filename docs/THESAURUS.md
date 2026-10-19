@@ -45,3 +45,8 @@ before introducing it anywhere else.
 | Render Layers setup | Material Cryptomatte plus AQS_Liquid, AQS_Spray, AQS_Foam and AQS_Bubbles scalar AOVs on the active view layer. | Does not create additional view layers. |
 | Ocean (Simulated) | A Beta liquid wave tank, filled once and driven by a paddle. | Separate from the procedural Gerstner ocean; no buoy support. |
 | Wave Paddle | A tagged fluid effector driven by a sine F-Curve modifier. | Wave Height controls stroke; Wave Period is seconds per cycle. |
+| Simple view | Default per-setup view with the most useful look controls and actions. | UI state only; saved with the setup. |
+| Advanced view | Per-setup gear toggle revealing all controls. | Also reveals scene memory information and render-layer setup. |
+| Control specification | Ordered per-mode control IDs used by the panel and headless tests. | `ui/control_spec.py` |
+| Water Lighting | Removable sky world, sun and supported render-setting adjustments. | Delete restores the saved world/settings. |
+| Demo scene | A separate procedural real-time showcase, built by Load Demo. | Original scenes are preserved. |
