@@ -12,6 +12,65 @@ from ..materials import mats
 from . import still_water as sw
 
 ROLE = 'aqs_tank_role'
+GRAVITY = 9.81
+WATER_FRACTION = 0.55   # still-water depth as a share of the tank height
+STEEPNESS_MARGIN = 0.8  # share of the breaking limit a requested wave may use
+
+
+def wave_number(period, depth):
+    """Solve the linear dispersion relation w^2 = g k tanh(k h) for k."""
+    omega = 2 * math.pi / period
+    k = max(omega * omega / GRAVITY, 1e-6)  # deep-water first guess
+    for _ in range(60):
+        t = math.tanh(k * depth)
+        step = (GRAVITY * k * t - omega * omega) / (
+            GRAVITY * (t + k * depth * (1 - t * t)))
+        k -= step
+        if abs(step) < 1e-9 * k:
+            break
+    return k
+
+
+def wave_plan(entry):
+    """(achievable wave height, paddle amplitude) for the requested waves.
+
+    Linear piston-wavemaker theory: a full-depth piston with stroke S makes
+    waves H = S * 2(cosh 2kh - 1) / (sinh 2kh + 2kh).  The request is capped
+    below the Miche breaking limit H = 0.142 L tanh(kh): a steeper wave
+    breaks at the paddle and never travels.  (Storm Surf once asked for
+    H/L ~ 0.26 at a 1.5 s period; it collapsed within 2 m of the paddle and
+    the "late decay" was the leftover slosh against the paddle face.)
+    """
+    length, _width, depth = entry.tank_size
+    h = depth * WATER_FRACTION
+    k = wave_number(entry.wave_period, h)
+    kh = k * h
+    limit = STEEPNESS_MARGIN * 0.142 * (2 * math.pi / k) * math.tanh(kh)
+    height = min(entry.wave_height, limit)
+    gain = 2.0 if kh > 10 else \
+        2 * (math.cosh(2 * kh) - 1) / (math.sinh(2 * kh) + 2 * kh)
+    return height, min(height / gain / 2, length * 0.08)
+
+
+def _place_parts(entry, paddle, source, amplitude, dx):
+    """A finite piston kept inside the walls through its full stroke, and
+    the initial water block one cell in front of it.  Both depend on the
+    stroke, which depends on the period — so period edits re-place them."""
+    length, width, depth = entry.tank_size
+    origin = Vector(entry.get('tank_origin', (0, 0, 0)))
+    water_depth = depth * WATER_FRACTION
+    thick = max(0.2, dx * 1.5)
+    center_x = -length / 2 + thick / 2 + amplitude + dx
+    paddle.location = origin + Vector((center_x, 0, depth * 0.5))
+    paddle.scale = (thick, max(width - dx, dx), depth * 0.98)
+    curve = _paddle_curve(paddle, entry)
+    for key in curve.keyframe_points:  # animation overrides .location
+        key.co.y = paddle.location.x
+        key.interpolation = 'CONSTANT'
+    source.location = origin + Vector((thick / 2 + amplitude / 2 + dx / 2, 0, water_depth / 2))
+    source.scale = (max(length - thick - amplitude - 3 * dx, dx),
+                    max(width - 2 * dx, dx), max(water_depth - dx, dx))
+    return curve
 
 
 def _box(col, uid, role):
@@ -59,46 +118,31 @@ def apply_settings(context, entry):
     if dom is None or source is None or paddle is None:
         raise RuntimeError('The wave tank is incomplete. Recreate this setup.')
     length, width, depth = entry.tank_size
-    scene = presets.scene_for(entry)
     origin = Vector(entry.get('tank_origin', (0, 0, 0)))
     resolution = max(16, entry.base_resolution // 2) if entry.draft else entry.base_resolution
-    dx = max(entry.tank_size) / resolution
-    # A finite piston, kept inside the walls through its full stroke.
-    amplitude = min(entry.wave_height * 0.5, length * 0.08)
-    thick = max(0.2, dx * 1.5)
-    center_x = -length / 2 + thick / 2 + amplitude + dx
-    water_depth = depth * 0.55
     dom.location = origin + Vector((0, 0, depth / 2))
     dom.scale = (length, width, depth)
     ds.resolution_max = resolution
     ds.mesh_scale = 1 if entry.draft else 2
     for side in ('front', 'back', 'left', 'right', 'top', 'bottom'):
         setattr(ds, 'use_collision_border_' + side, True)
-    source.location = origin + Vector((thick / 2 + amplitude / 2 + dx / 2, 0, water_depth / 2))
-    source.scale = (max(length - thick - amplitude - 3 * dx, dx),
-                    max(width - 2 * dx, dx), max(water_depth - dx, dx))
-    paddle.location = origin + Vector((center_x, 0, depth * 0.5))
-    paddle.scale = (thick, max(width - dx, dx), depth * 0.98)
-    curve = _paddle_curve(paddle, entry)
-    for key in curve.keyframe_points:
-        key.co.y = paddle.location.x
-        key.interpolation = 'CONSTANT'
-    apply_period(entry)
+    apply_period(entry)  # places paddle + water block for this stroke
     whitewater.apply(entry)
     dom.update_tag()
     paddle.update_tag()
 
 
 def apply_period(entry):
-    """Update timing/subframes without touching geometry or liquid settings."""
+    """Update paddle stroke, timing and subframes without touching the
+    domain or liquid settings."""
     dom, ds = presets.domain(entry)
-    paddle = _part(entry, 'paddle')
-    if dom is None or ds is None or paddle is None:
+    source, paddle = _part(entry, 'water'), _part(entry, 'paddle')
+    if dom is None or ds is None or source is None or paddle is None:
         raise RuntimeError('The wave tank is incomplete. Recreate this setup.')
     scene = presets.scene_for(entry)
-    amplitude = min(entry.wave_height * 0.5, entry.tank_size[0] * 0.08)
+    _height, amplitude = wave_plan(entry)
     dx = max(entry.tank_size) / max(ds.resolution_max, 1)
-    curve = _paddle_curve(paddle, entry)
+    curve = _place_parts(entry, paddle, source, amplitude, dx)
     modifier = next((m for m in curve.modifiers if m.type == 'FNGENERATOR'), None)
     if modifier is None:
         modifier = curve.modifiers.new('FNGENERATOR')

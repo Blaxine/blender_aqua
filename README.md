@@ -147,10 +147,18 @@ Render Layers. No additional view layers are created. This action intentionally
 leaves those view-layer settings in place when an assembly is deleted.
 
 **Ocean (Simulated) · Beta** creates a closed tank, an initial water block and a
-sine-driven paddle. Wave Height controls paddle stroke; Wave Period is in seconds.
-Tank Size defaults to 20 × 8 × 4 metres. Place a rock inside the tank and add it to
-Water Obstacles, save, then bake. Draft is useful for layout; raise resolution for
-small waves. This mode does not use the procedural ocean's buoys or wake system.
+sine-driven paddle. Wave Height is the target height — the paddle stroke is
+derived from it, the period and the water depth — and Wave Period is in seconds.
+Waves too steep to exist (they would break at the paddle) are capped, and the
+panel says so: raise Period for taller waves. Tank Size defaults to 20 × 8 × 4
+metres. Place a rock inside the tank and add it to Water Obstacles, save, then
+bake. Draft is useful for layout; raise resolution for small waves. This mode
+does not use the procedural ocean's buoys or wake system.
+
+**Known limitation (0.19.1):** Blender's liquid solver receives almost none of
+the paddle's velocity, so the paddle mostly sloshes the water next to it and
+little wave energy travels down the tank. A different wave generator is
+planned; see `docs/REMAINING_WORK.md` (S020).
 
 Existing setups initially show **Custom**. Their whitewater flags are read from
 the domain without applying a preset or modifying its solver/render setup. Edit
@@ -217,6 +225,12 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
   and Mist — that hit Water Obstacles and splash along them; Water Color
   tints it. *Simulate Liquid* (Beta) swaps the jet for a baked Mantaflow
   liquid when you need pools.
+- 0.19.1 fixes: deleting Water Lighting no longer strips the sky from
+  another scene that uses it; Ocean (Simulated) derives the paddle stroke
+  from wave theory and caps waves that would break, and Storm Surf uses a
+  2.8 s period so its 0.9 m waves can exist. Plane Ocean, Plane Rain and
+  Rain Simulation work again on Blender 5.2, which changed how Geometry
+  Nodes modifier inputs and the Random Value node are accessed.
 - If anything fails, a popup explains it in plain words and **Copy
   Report** puts a ready-to-paste bug report on your clipboard (personal
   paths removed).

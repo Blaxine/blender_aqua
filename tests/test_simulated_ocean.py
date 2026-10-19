@@ -49,6 +49,42 @@ def test_build_and_presets():
                   a.get(lib.C.OWNER_PROP) for a in bpy.data.actions), str(lib.tagged_left()))
 
 
+def test_wavemaker_theory():
+    import math
+    # Linear dispersion: deep water L = g T^2 / 2pi.
+    k = so.wave_number(1.0, 50.0)
+    lib.check("dispersion matches deep-water wavelength",
+              abs(2 * math.pi / k - 9.81 / (2 * math.pi)) < 1e-3, f"L={2 * math.pi / k:.4f}")
+    bpy.ops.aquasuite.simulated_ocean_create(preset="OCEAN_STORM")
+    u = lib.last_uuid()
+    e = lib.entry(u)
+    height, _amp = so.wave_plan(e)
+    lib.check("Storm Surf preset is below the breaking limit (not capped)",
+              abs(height - e.wave_height) < 1e-6, f"{height:.3f} of {e.wave_height:.3f}")
+    e.wave_period = 1.5
+    height, amp = so.wave_plan(e)
+    lib.check("a 0.9 m wave at 1.5 s is capped below breaking (H/L < 0.142)",
+              height < 0.45 and height / (2 * math.pi / so.wave_number(1.5, 2.2)) < 0.142,
+              f"{height:.3f} m")
+    # The period now changes the stroke: the piston must still clear the
+    # back wall at full stroke and leave the water block in front of it.
+    pad, src = so._part(e, "paddle"), so._part(e, "water")
+    dom, ds = presets.domain(e)
+    walls = []
+    for period in (12.0, 0.6, 2.8):
+        e.wave_period = period
+        _h, amp = so.wave_plan(e)
+        rest = so._paddle_curve(pad, e).keyframe_points[0].co.y  # minus the sine
+        back = rest - pad.scale.x / 2 - amp          # full backward stroke
+        front_at_rest = rest + pad.scale.x / 2
+        water_back = src.location.x - src.scale.x / 2
+        walls.append(back > dom.location.x - e.tank_size[0] / 2
+                     and front_at_rest < water_back)
+    lib.check("period edits keep the paddle inside the tank, water block in front",
+              all(walls), str(walls))
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
+
+
 def test_obstacle_in_tank():
     bpy.ops.aquasuite.simulated_ocean_create()
     u = lib.last_uuid()

@@ -59,7 +59,9 @@ CATALOG = {
                              wave_period=2.4, tank_size=(20.0, 8.0, 4.0)),
     'OCEAN_STORM': _package(C.MODE_SIMOCEAN, 'Storm Surf', resolution=160, draft=False,
                            spray=0.8, foam=0.85, bubbles=0.4, wave_height=0.9,
-                           wave_period=1.5, tank_size=(20.0, 8.0, 4.0)),
+                           # 0.9 m needs a long period to stay below the
+                           # breaking limit (at 1.5 s it broke at the paddle).
+                           wave_period=2.8, tank_size=(20.0, 8.0, 4.0)),
 }
 DEFAULTS = {C.MODE_STILL: 'STILL_CALM', C.MODE_SIMRAIN: 'RAIN_RAIN',
             C.MODE_HOSE: 'HOSE_GARDEN', C.MODE_SIMOCEAN: 'OCEAN_ROLLING'}

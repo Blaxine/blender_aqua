@@ -100,6 +100,29 @@ def _release_effectors(assembly_uuid):
         del obj[C.EFFECTOR_OWNERS_PROP]
 
 
+def _used_elsewhere(id_block, scene):
+    """True when anything besides ``scene`` still uses the datablock.
+
+    Runs after the assembly's restore, so ``scene`` only references it
+    through its own registry entry.  Another scene's world slot, another
+    scene's registry, or a fake user means the user adopted it.
+    """
+    if id_block.use_fake_user:
+        return True
+    users = bpy.data.user_map(subset=[id_block]).get(id_block, set())
+    return any(u != scene for u in users)
+
+
+def _remove_or_release(id_block, scene, remover):
+    """Remove an owned datablock, or — when the user adopted it elsewhere —
+    keep it and drop the owner tag so it becomes ordinary user data that no
+    later sweep can touch."""
+    if _used_elsewhere(id_block, scene):
+        del id_block[C.OWNER_PROP]
+    else:
+        remover(id_block)
+
+
 def _remove_tagged(data_iterable, assembly_uuid, remover):
     for id_block in list(data_iterable):
         v = id_block.get(C.OWNER_PROP, "")
@@ -171,7 +194,10 @@ def delete_assembly(scene, assembly_uuid, delete_cache=False):
     _remove_tagged(d.materials, assembly_uuid, lambda m: d.materials.remove(m))
     _remove_tagged(d.collections, assembly_uuid, lambda c: d.collections.remove(c))
     _remove_tagged(d.actions, assembly_uuid, lambda a: d.actions.remove(a))
-    _remove_tagged(d.worlds, assembly_uuid, lambda w: d.worlds.remove(w))
+    # A generated sky world may have been assigned to another scene;
+    # removing it would leave that scene with no world (P2).
+    _remove_tagged(d.worlds, assembly_uuid, lambda w: _remove_or_release(
+        w, scene, d.worlds.remove))
     _remove_tagged(d.lights, assembly_uuid, lambda l: d.lights.remove(l))
 
     registry.remove(scene, assembly_uuid)

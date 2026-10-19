@@ -275,6 +275,18 @@ def _draw_whitewater(box, entry):
         warn.label(text=entry.ww_warning, icon='ERROR')
 
 
+def _draw_wave_limit(box, entry):
+    """Say so when the requested waves would break at the paddle and were
+    capped — and what to change to get taller ones."""
+    from ..level2 import simulated_ocean
+    height, _amplitude = simulated_ocean.wave_plan(entry)
+    if height < entry.wave_height - 0.005:
+        row = box.row()
+        row.alert = True
+        row.label(text=f"Waves this steep break — capped at {height:.2f} m. "
+                       "Raise Period for taller waves", icon='INFO')
+
+
 def _draw_spec(box, context, entry):
     root = box
     baking = bakes.is_baking(entry)
@@ -289,12 +301,14 @@ def _draw_spec(box, context, entry):
             name = control.split(':', 1)[1]
             labels = {'rain_density': 'Drop Amount', 'rain_speed': 'Speed', 'rain_angle': 'Angle', 'hose_color': 'Water Color'}
             row.prop(entry, name, **({'text': labels[name]} if name in labels else {}))
+            if name == 'wave_period' and entry.mode == C.MODE_SIMOCEAN:
+                _draw_wave_limit(box, entry)
         elif control.startswith('ocean:'):
             name = control.split(':', 1)[1]
             mod = ocean_mod.find_ocean_modifier(entry.primary, entry.uuid)
-            ident = ocean_mod._socket_identifier(mod, name) if mod else None
-            if ident:
-                box.prop(mod, f'["{ident}"]', text=name)
+            owner, path = ocean_mod.input_prop(mod, name) if mod else (None, None)
+            if owner is not None:
+                box.prop(owner, path, text=name)
         elif control.startswith('particles:'):
             _draw_particles(box, entry, (control.split(':', 1)[1],))
         elif control == 'floaters':

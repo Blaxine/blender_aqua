@@ -146,6 +146,12 @@ def rain_velocity(entry):
 EMIT_MIN_VOXELS = 0.75
 
 
+def _random_out(node):
+    """The Random Value output for its data type.  Before Blender 5.2 the
+    node has one output per type (float is index 1); 5.2 has just one."""
+    return next((s for s in node.outputs if s.enabled), node.outputs[0])
+
+
 def _drop_tree(uid, droplet_mat):
     """Build the GN drop field shared by the rain-drops and emitter objects.
 
@@ -232,7 +238,7 @@ def _drop_tree(uid, droplet_mat):
     # T = max(Fall Time, 1e-3); dt = fract(t/T + rand) * T  (time since spawn)
     T = m("MAXIMUM", a=gin.outputs["Fall Time"], v1=1e-3)
     tt = m("DIVIDE", a=time.outputs["Seconds"], b=T.outputs[0])
-    ph = m("ADD", a=tt.outputs[0], b=rand.outputs[1])
+    ph = m("ADD", a=tt.outputs[0], b=_random_out(rand))
     ph = m("FRACT", a=ph.outputs[0])
     dt = m("MULTIPLY", a=ph.outputs[0], b=T.outputs[0])
 
@@ -280,7 +286,7 @@ def _drop_tree(uid, droplet_mat):
     skip = nt.nodes.new("FunctionNodeCompare")
     skip.data_type = "FLOAT"
     skip.operation = "GREATER_EQUAL"
-    nt.links.new(pick.outputs[1], skip.inputs[0])
+    nt.links.new(_random_out(pick), skip.inputs[0])
     nt.links.new(gin.outputs["Splash Fraction"], skip.inputs[1])
     unwanted = nt.nodes.new("FunctionNodeBooleanMath")
     unwanted.operation = "OR"

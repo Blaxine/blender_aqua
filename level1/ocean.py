@@ -195,10 +195,28 @@ def _socket_identifier(mod, name):
     return None
 
 
-def get_input(mod, name):
+def input_prop(mod, name):
+    """(owner, property path) of a modifier input, for reading, writing
+    and ``layout.prop``.  Blender 5.2 moved the values from ID properties
+    on the modifier (``mod["Socket_0"]``) to RNA structs
+    (``mod.properties.inputs.Socket_0.value``)."""
     ident = _socket_identifier(mod, name)
     if ident is None:
+        return None, None
+    interface = getattr(mod, "properties", None)
+    if interface is not None and hasattr(interface, "inputs"):
+        socket = getattr(interface.inputs, ident, None)
+        return (socket, "value") if socket is not None else (None, None)
+    return mod, f'["{ident}"]'
+
+
+def get_input(mod, name):
+    owner, path = input_prop(mod, name)
+    if owner is None:
         return None
+    if path == "value":
+        return owner.value
+    ident = path[2:-2]
     try:
         return mod[ident]
     except KeyError:
@@ -209,9 +227,12 @@ def get_input(mod, name):
 
 
 def set_input(mod, name, value):
-    ident = _socket_identifier(mod, name)
-    if ident is not None and get_input(mod, name) != value:
-        mod[ident] = value
+    owner, path = input_prop(mod, name)
+    if owner is not None and get_input(mod, name) != value:
+        if path == "value":
+            owner.value = value
+        else:
+            mod[path[2:-2]] = value
         mod.id_data.update_tag()
 
 

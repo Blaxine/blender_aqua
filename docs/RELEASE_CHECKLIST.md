@@ -6,7 +6,14 @@ included in the extension zip.)
 
 Version under test: `________`  Date: `________`
 
-## 0.18.0 feature review gate
+## Feature review gate (introduced in 0.18.0; still open in 0.19.1)
+
+Automated checks for several of these exist (see the coverage table in
+[PRESET_REVIEW.md](PRESET_REVIEW.md)); a box is ticked only when the check was
+**run in Blender 5.1** for the version under test, not when a test exists.
+Simulated-ocean waves do not propagate yet (S020 in
+[REMAINING_WORK.md](REMAINING_WORK.md)), so the ocean items below cannot pass
+until its wave generator is replaced.
 
 - [ ] Complete [the preset manual review](PRESET_REVIEW.md) in Blender 5.1.
 - [ ] All twelve presets produce distinct, usable baked results.
@@ -58,6 +65,8 @@ Version under test: `________`  Date: `________`
 
 ## 5. Errors and Beta notes
 
+- [ ] Water Lighting in scene A, assign its sky world to scene B, delete A's lighting: A gets its old world back and B keeps the sky (also after save/reopen)
+- [ ] Ocean (Simulated): set Wave Period to 1.5 s at Wave Height 0.9 m — a red "capped" notice appears; raise Period and it disappears
 - [ ] Unsaved file → Still Water → Bake: popup with a plain message and Copy Report
 - [ ] Copy Report → paste into a text editor: versions, OS, mode, message, traceback; **no** home folder, **no** .blend path or name
 - [ ] Restart Blender: no Beta note on creating a Beta mode again

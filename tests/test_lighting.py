@@ -64,6 +64,61 @@ def test_cycles_restore_when_enabled():
               scene.cycles.transmission_bounces, scene.cycles.transparent_max_bounces) == (4, 2, 3))
 
 
+def _shared_world_roundtrip(reload):
+    scene = lib.scene()
+    world_name = lambda s: s.world.name if s.world else None  # survives reload
+    previous = world_name(scene)
+    bpy.ops.aquasuite.water_lighting()
+    uid = lighting.existing(scene).uuid
+    sky_world = scene.world
+    other = bpy.data.scenes.new('AQS Shared World B')
+    other.world = sky_world
+    if reload:
+        path = lib.save_blend('shared_world')
+        bpy.ops.wm.open_mainfile(filepath=path)
+        scene = lib.scene()
+        other = bpy.data.scenes['AQS Shared World B']
+        sky_world = other.world
+    delete.delete_assembly(scene, uid)
+    kept = other.world
+    sky = next((n for n in kept.node_tree.nodes if n.type == 'TEX_SKY'), None) if kept and kept.use_nodes else None
+    tag = '(reloaded)' if reload else ''
+    lib.check(f'deleting lighting restores its own scene {tag}',
+              world_name(scene) == previous and lighting.existing(scene) is None)
+    lib.check(f'another scene keeps the shared sky world and node tree {tag}',
+              kept is not None and kept == sky_world and sky is not None
+              and any(l.to_node.type == 'OUTPUT_WORLD' for l in kept.node_tree.links))
+    lib.check(f'kept world is no longer owned by AquaSuite {tag}',
+              kept is not None and lib.C.OWNER_PROP not in kept.keys())
+    bpy.data.scenes.remove(other)
+    if kept is not None and kept.users == 0:
+        bpy.data.worlds.remove(kept)
+
+
+def test_shared_world_survives_delete():
+    _shared_world_roundtrip(reload=False)
+
+
+def test_shared_world_survives_delete_after_reload():
+    _shared_world_roundtrip(reload=True)
+
+
+def test_fake_user_world_survives_delete():
+    scene = lib.scene()
+    bpy.ops.aquasuite.water_lighting()
+    entry = lighting.existing(scene)
+    world = entry.light_world
+    world.use_fake_user = True
+    name = world.name
+    delete.delete_assembly(scene, entry.uuid)
+    kept = bpy.data.worlds.get(name)
+    lib.check('a fake-user sky world is kept and released',
+              kept is not None and lib.C.OWNER_PROP not in kept.keys())
+    if kept is not None:
+        kept.use_fake_user = False
+        bpy.data.worlds.remove(kept)
+
+
 def test_lighting_failed_create_restores():
     scene = lib.scene()
     previous = scene.world

@@ -1,4 +1,18 @@
-# Preset manual review (current preview: 0.18.0)
+# Preset manual review (current preview: 0.19.1)
+
+## 0.19.1 changes to review — 2026-10-19
+
+- **Storm Surf period 1.5 s → 2.8 s.** Not a taste change: 0.9 m at 1.5 s is
+  steeper than any water wave can be (H/L ≈ 0.26 vs ≈ 0.142 breaking) and broke
+  at the paddle. Wave Height and the other presets' values are unchanged.
+- **Paddle stroke from wavemaker theory** for all three ocean presets, so the
+  paddle moves less than before for Rolling Waves (0.45 → 0.30 m stroke) and
+  slightly more for Calm (0.12 → 0.13 m). Too-steep requests are capped with a
+  red panel notice.
+- **Known limitation, not tuning:** the paddle barely drives travelling waves
+  in any preset (S020 in [REMAINING_WORK.md](REMAINING_WORK.md)). Do not tune
+  ocean preset values (S021) against the current paddle; review the other nine
+  presets as usual.
 
 ## REQ-003 review gate — 2026-10-18
 
@@ -74,14 +88,25 @@ Record the preset, engine, resolution/Draft, frame range, and the visible result
 for anything that fails. Exact preset values and the 20 × 8 × 4 m tank default
 are initial choices awaiting this review.
 
-## Deferred automated work
+## Automated coverage (reconciled 2026-10-19)
 
-- Extend create/delete, Beta and package tests to include the new mode/actions.
-- Check all twelve preset packages, modified snapshots and legacy hydration.
-- Check independent whitewater toggles, Draft restoration, renamed-system
-  ownership, orphan cleanup, and re-enabling render instances.
-- Check idempotent AOV setup and render actual element masks in both engines.
-- Bake each preset and measure liquid, secondary populations, wave propagation,
-  amplitude ordering and obstacle interaction.
-- Re-run the full suite with --bake on the supported test version; retain honest
-  reporting of the previously exposed Blender 4.1 shutdown crash.
+Implemented means a test exists; run means it was executed and the result is
+recorded. The 0.19.1 runs were on Blender 4.5 only.
+
+| Check | Implemented in | Run |
+|---|---|---|
+| Create/delete, Beta and package cover the new mode/actions | `test_create_delete`, `test_beta`, `test_package` | 4.5 (0.19.1); 5.1.2 + 4.1.1 (0.19.0) |
+| All twelve preset packages apply; modified marker | `test_presets` | same |
+| Whitewater toggles off/on, Draft suspends and restores, render-ready | `test_whitewater` | same |
+| Idempotent Cryptomatte + AOV setup | `test_presets` | same |
+| Each preset bakes liquid (16 frames, capped resolution) | `test_preset_bakes --bake` | 4.5 (0.19.1); 5.1.2 (0.19.0) |
+| Baked Spray/Foam/Bubbles have particles | `test_whitewater --bake` | 4.5 (0.19.1) |
+| Ocean ordering + Storm sustain (120 frames) | `test_simulated_ocean --bake` | 4.5 (0.19.1), see S023 |
+| Wavemaker theory, steepness cap, paddle clearance | `test_simulated_ocean` | 4.5 (0.19.1) |
+| Shared/fake-user lighting world survives delete | `test_lighting` | 4.5 (0.19.1) |
+
+Still not automated: legacy (v0.16.1) whitewater hydration from a real saved
+file, renamed legacy whitewater systems, rendered AOV mask contents in either
+engine, baked wave interaction with an obstacle, and mid-tank wave height
+(the ocean test measures surface range, which the paddle slosh dominates —
+replace it when S020's new wave generator lands).
