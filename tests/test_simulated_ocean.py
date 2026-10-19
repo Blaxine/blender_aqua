@@ -14,7 +14,7 @@ import bpy  # noqa: E402
 from aquasuite.core import presets  # noqa: E402
 from aquasuite.level2 import simulated_ocean as so, still_water as sw  # noqa: E402
 
-FRAMES = 72
+FRAMES = 120
 
 
 def _stroke(u):
@@ -68,7 +68,14 @@ def _waviness(u):
     with bpy.context.temp_override(active_object=dom, object=dom, selected_objects=[dom],
                                    selected_editable_objects=[dom]):
         bpy.ops.fluid.bake_all()
-    lib.scene().frame_set(FRAMES)
+    samples = []
+    for frame in range(FRAMES * 3 // 4, FRAMES + 1, 6):
+        samples.append(_surface_range(dom, frame))
+    return samples
+
+
+def _surface_range(dom, frame):
+    lib.scene().frame_set(frame)
     ev = dom.evaluated_get(bpy.context.evaluated_depsgraph_get())
     me = ev.to_mesh()
     mw = dom.matrix_world
@@ -89,12 +96,18 @@ def test_bake_calm_vs_rolling():
     lib.save_blend("ocean")
     lib.scene().frame_start, lib.scene().frame_end = 1, FRAMES
     waves = {}
-    for key in ("OCEAN_CALM", "OCEAN_ROLLING"):
+    for key in ("OCEAN_CALM", "OCEAN_ROLLING", "OCEAN_STORM"):
+        lib.scene().frame_set(1)
         bpy.ops.aquasuite.simulated_ocean_create(preset=key)
-        waves[key] = _waviness(lib.last_uuid())
-    lib.check("baked Rolling Waves are clearly taller than Calm",
-              waves["OCEAN_ROLLING"] > 0.15 and waves["OCEAN_ROLLING"] > 3 * waves["OCEAN_CALM"],
-              f"crest-to-trough m: {({k: round(v, 3) for k, v in waves.items()})}")
+        uid = lib.last_uuid()
+        waves[key] = _waviness(uid)
+        from aquasuite.core import delete
+        delete.delete_assembly(lib.scene(), uid, delete_cache=True)
+    means = {k: sum(v) / len(v) for k, v in waves.items()}
+    lib.check("late-quarter waves order Calm < Rolling < Storm",
+              means['OCEAN_CALM'] < means['OCEAN_ROLLING'] < means['OCEAN_STORM'], str(waves))
+    lib.check('Storm remains sustained through the last quarter',
+              min(waves['OCEAN_STORM']) > .3 and means['OCEAN_STORM'] > .45, str(waves['OCEAN_STORM']))
 
 
 lib.main(globals())

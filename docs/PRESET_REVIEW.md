@@ -1,5 +1,27 @@
 # Preset manual review (current preview: 0.18.0)
 
+## REQ-003 review gate — 2026-10-18
+
+The user has no visual observations/renders yet. No preset values or wave-paddle
+forcing have been tuned in REQ-003. S019–S021 remain pending; the known Storm
+Surf late-bake decay is not claimed fixed. Do not treat a mesh-presence smoke
+test as visual acceptance or evidence of sustained breaking waves.
+
+`tests/test_preset_bakes.py --bake` checks all twelve presets at capped resolution
+over 16 frames. `tests/test_simulated_ocean.py --bake` samples the last quarter
+of a 120-frame bake for all three ocean presets and checks ordering and Storm
+sustain. Its provisional acceptance thresholds are mean >0.45 m and each late
+sample >0.3 m; record actual measurements and review before changing them.
+
+For every preset record Blender version, engine, resolution, Draft, frame range,
+frame(s) rendered with Water Lighting, observed liquid/whitewater appearance,
+and a proposed change. Render both Cycles and EEVEE. Keep current preset values
+until that review establishes what should change.
+
+Validation 2026-10-18: all twelve low-resolution preset smoke bakes passed on
+Blender 5.1.2 (16 frames each). The 120-frame ocean ordering/sustain gate is
+implemented but remains pending with S019–S021; no review renders were made.
+
 The efficiency changes and their focused verification are documented in
 `PERFORMANCE_REVIEW.md`. The bake/render acceptance steps below remain applicable.
 
