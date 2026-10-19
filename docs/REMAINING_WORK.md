@@ -1,8 +1,13 @@
-# AquaSuite 0.19.1 — remaining work
+# AquaSuite 0.20.0 — remaining work
 
 Updated: 2026-10-19. Scope: REQ-003 implementation and review against
-`c8939f5`, through `f48d83c`, plus the 0.19.1 fix pass on top of `54e172d`.
+`c8939f5`, through `f48d83c`, plus the 0.19.1 fix pass on top of `54e172d`
+and the 0.20.0 wave maker on top of `193378b`.
 This is a preview, not a release acceptance record.
+
+**0.20.0** replaces Ocean (Simulated)'s paddle with a force-field wave maker
+(S020, S023 below). It was validated on **Blender 4.5.4 and 5.2.2 LTS** only:
+full `--bake` suite 489 passed, 0 failed, 1 skipped across both.
 
 0.19.1 was validated on **Blender 4.5.x and 5.2.2 LTS** — Blender 5.1 (the
 release-test version) and 4.1 were not installed on the machine that ran it.
@@ -92,6 +97,59 @@ script; they have not been looked at in the UI.
      overdrove the water at the wall. **Recommended follow-up:** replace the
      paddle with a calibrated full-depth forcing zone, calibrate strength per
      preset against target wave height mid-tank, then redo S023 and S019.
+
+  **0.20.0: wave generation fixed; visual validation (S019) still pending.**
+  New tanks drive their waves with a Wind force field instead of the paddle
+  (`level2/simulated_ocean.py`): full depth and width, a zone `l` metres from
+  the left wall, strength a sine at the wave period that fades in over the
+  first period. All numbers below are Blender 4.5, liquid-mesh surface height
+  in 0.5 m bins along the centreline (|y| < 1 m), probes in the 20 × 8 × 4 m
+  tank (2.2 m water).
+  1. *Why every earlier strength overdrove.* Blender passes a force field to
+     the liquid as 0.2 × strength per frame and Mantaflow adds it to the
+     velocity once per solver step, so Wind strength S accelerates the water
+     by 0.2·S·fps m/s² (whole-tank static tilt: 0.195·S·fps at 24 and 48 fps,
+     the same at resolution 80 and 160, doubled with two steps per frame).
+     Strength 1.5 is ~7 m/s²; the waves need 0.2–1 m/s², i.e. S ≈ 0.04–0.2.
+  2. *A strength from theory, not a fit.* A horizontal force uniform over the
+     depth is curl-free, so it acts exactly like a surface pressure: the zone
+     is a triangular pressure patch at the wall. Linear theory for an
+     oscillating surface pressure gives H = 4ωF sin²(kl/2)/(g k² c_g), most
+     efficient at l = λ/2; the zone is min(λ/2, 0.2 × tank length) (4 m for
+     all three presets). The strength is that F / (0.2·fps), with no fudge
+     factor: measured mid-tank height / theory is 1.17 (Calm), 0.87 (Rolling),
+     1.04 (Storm).
+  3. *Small waves need small cells.* Under a steady push the liquid surface
+     settles into flat terraces one cell high: Mantaflow does not hold
+     sub-cell slopes, so waves lower than about a cell do not travel. Calm's
+     0.12 m waves at 12.5 cm cells (resolution 160) died within 3 m of the
+     zone (≤ 0.03 m from x = −3) at the theory strength, while doubling it
+     jumped to 0.25 m. At 10 cm cells (resolution 200) the theory strength
+     gives 0.14 m mid-tank, so **Calm's preset resolution is now 200** (about
+     2× the bake time). At Draft resolution 80, Rolling's waves reach only
+     0.09 m near the zone and do not travel: Draft is for layout only.
+  4. *Waves take ~10 s to fill the middle of the tank.* At resolution 160,
+     Rolling's mid-tank height grows 0.06 → 0.24 → 0.39 m over the periods
+     ending at frames 114, 230 and 288 (24 fps). New tanks still default to a
+     144-frame cache, which shows the waves only about half-way down the tank.
+  5. *Isolation.* The Wind is limited to the tank (tube falloff over the tank
+     cross-section, positive side of the left wall only), and the domain's
+     effector collection is the tank's own collection, so scene force fields
+     do not disturb the calibrated waves and the wave maker does not push
+     anything outside the tank.
+  6. *Old files.* A tank saved with the paddle keeps it: opening, editing and
+     baking it run the 0.19 paddle code unchanged (fast test: same stroke,
+     phase and water block after save/reload; Wave Period edits still re-plan
+     the stroke). Its panel offers **Upgrade Wave Maker**, which swaps the
+     paddle for the wave maker and removes the paddle animation (undoable).
+  7. *Unrelated finding (Windows).* When a mesh file's full path reaches
+     Windows' 260-character limit, Mantaflow silently writes no liquid mesh:
+     Bake All reports success, the data files (shorter names) are all there,
+     and the domain shows as a box. Seen with mesh paths of 260–262
+     characters (fine at ≤ 257). Fixed: Bake now counts the longest cache
+     file path first (data, mesh, particles, guiding; frame digits from the
+     end frame) and refuses at 260+ with AQS-E021 before Mantaflow runs
+     (`tests/test_cache_path.py`, fast; Windows only for the refusal).
 - [ ] **S021 — Apply review-supported preset tuning.** Update preset values only
   once the visual review establishes the needed changes. Recheck all affected
   presets after tuning.
@@ -111,6 +169,23 @@ script; they have not been looked at in the UI.
   next to the paddle, so it rewards slosh at the paddle as much as travelling
   waves (S020 point 3). Acceptance waits for a mid-tank wave-height metric
   alongside S020's new wave generator, and for S019.
+  **0.20.0: metric replaced; passes on Blender 4.5; acceptance still waits for
+  S019.** The test now bakes each preset for 288 frames (12 s) and measures
+  wave height as crest-to-trough over the last full wave period at five fixed
+  gauges x = −5, −4.5, −4, −3.5, −3 m (clear of the 4 m forcing zone), plus
+  the same at the wall (x = −9.5) and the liquid volume at the first and last
+  frame. Checks: mid-tank within 35% of the (capped) target, wall at most
+  2.5 × mid-tank, volume within 1%, and Calm < Rolling < Storm. Measured:
+
+  | Preset | Target | Mid-tank (gauges) | Wall | Volume |
+  |---|---|---|---|---|
+  | Calm (res 200) | 0.12 m | 0.141 m (0.145, 0.141, 0.144, 0.140, 0.137) | 0.179 m | 329.73 → 329.94 m³ (+0.06%) |
+  | Rolling Waves (res 160) | 0.45 m | 0.400 m (0.372, 0.405, 0.400, 0.422, 0.398) | 0.521 m | 322.30 → 322.61 m³ (+0.10%) |
+  | Storm Surf (res 160) | 0.90 m | 0.937 m (0.891, 0.908, 0.913, 0.951, 1.020) | 1.093 m | 322.30 → 322.72 m³ (+0.13%) |
+
+  For comparison, the 0.19.1 paddle at Rolling Waves gave 0.38 m at the wall
+  and 0.007–0.017 m from x = −5 onward. The 35% band and 2.5× wall limit are
+  provisional, chosen before any render was seen; assess them in S019.
 - [x] Run the full `tests/run_tests.py --bake` suite after fixes and tuning.
   **Blender 4.5, 0.19.1: 219 passed, 0 failed, 1 skipped in 225 s** (the skip is
   `test_efficiency.py`'s restricted-registration check: Blender 4.5 has no
@@ -120,6 +195,11 @@ script; they have not been looked at in the UI.
   0 skipped in 243 s**; 4.5 re-run after those fixes: 219 passed, 0 failed,
   1 skipped. Fast suite on 5.2.2: 200 passed, 0 failed, 4 skipped (bake-only
   files). Not run on 5.1 or 4.1 — repeat there before release.
+  **0.20.0: Blender 4.5.4 244 passed, 0 failed, 1 skipped (same skip);
+  Blender 5.2.2 245 passed, 0 failed, 0 skipped; 2069 s for both.** The ocean
+  bake test now bakes 3 × 288 frames (Calm at resolution 200), so it is the
+  slowest file. The runner prints pass/fail only; the mid-tank heights under
+  S023 are from a direct 4.5 run of the same test file. Not run on 5.1 or 4.1.
 
 ## Manual acceptance
 
@@ -171,10 +251,24 @@ script; they have not been looked at in the UI.
   report v0.19.1, create Plane Ocean, Plane Rain, Rain Simulation, Storm Surf
   and Water Lighting, and survive disable/re-enable; the same ZIP passes the
   same check in a fresh 4.5 profile. Repeat in Blender 5.1 before release.
+  **0.20.0:** `dist/aquasuite-0.20.0.zip` built with Blender 5.2.2's extension
+  builder (4.5's gives the same 41 files) and validated (41 files, same exclusions; the packaged
+  `simulated_ocean.py`, `presets.py`, `panel.py` and manifest match the
+  source). Fresh installs in isolated 4.5 and 5.2.2 profiles report v0.20.0,
+  create Calm (resolution 200) and Storm Surf with a Wind wave maker, and
+  re-enable. Upgrade check on 4.5: a Rolling Waves tank created and saved
+  with the installed 0.19.1 opens under an installed 0.20.0 with the same
+  paddle stroke (0.150 m), phase, rest position and water block; a Wave
+  Height edit still runs the paddle path; Upgrade Wave Maker then swaps in
+  the Wind wave maker (strength 0.108). Not baked under 0.20.0; repeat in 5.1.
 - [ ] Finish release notes and the remaining release checklist before publishing.
   Publishing is a later action; this document does not authorize an upload.
 
 ## Evidence already available
+
+- 0.20.0 (Blender 4.5.4 and 5.2.2): full `--bake` suite 489 passed, 0 failed,
+  1 skipped; ocean mid-tank heights, wall heights and volumes under S023;
+  force-scaling, resolution and legacy-tank findings under S020.
 
 - 0.19.1 (Blender 4.5 only): fast suite 199 passed, 0 failed, 5 skipped; full
   `--bake` suite 219 passed, 0 failed, 1 skipped; P2 regression tests fail

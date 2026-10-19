@@ -12,7 +12,9 @@
   if you want to retain them. Legacy emitters still use the existing rebuild path.
 - Resolution and preset changes perform one whitewater application. Size edits
   change particle render size only after adoption. Wave Period edits change
-  paddle timing/subframes without rebuilding tank geometry or whitewater.
+  the wave maker's timing and strength (or an old tank's paddle timing and
+  subframes) without rebuilding tank geometry or whitewater. Calm's 0.12 m
+  waves need resolution 200 (about 2× the bake time of 160) to travel.
 - **Generation Budget** caps shared whitewater generation (re-bake required).
   Zero suspends all elements without losing their choices. Default 1 preserves
   previous settings. Amount remains a relative visual density: unequal amounts

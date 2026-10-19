@@ -19,6 +19,14 @@
   **must be baked**; use the red bake button in the assembly box. The
   file must be saved first (caches live next to the .blend).
 
+- **“The bake folder's path is too long for Windows” (AQS-E021)** — Windows
+  limits a file's full path to 259 characters, and Blender's liquid solver
+  silently skips any cache file past it: the bake "finishes" but the liquid
+  shows as a box. AquaSuite counts the longest cache file name before baking
+  (whitewater particle files are the longest) and refuses instead. Save the
+  .blend in a shorter folder (for example `C:\Projects\shot.blend`) or set a
+  shorter Cache folder in the domain's Physics panel, then bake again.
+
 - **“Water goes straight through my object”** — two rules to know.
   (1) Only objects in the **AQS Water Obstacles** collection block
   water: select the object and click **＋** next to *Water obstacles* in
@@ -103,11 +111,20 @@
   being rendered, then render again. The four AOVs are Value passes. If a Color
   AOV already uses one of their names, rename it first. Pick materials with a
   Cryptomatte node for material mattes.
-- **Ocean waves are too coarse:** at 20 m tank length, Draft resolution 48 gives
-  roughly 42 cm cells. Small waves cannot be resolved at that scale. Reduce tank
-  size or raise resolution, and bake enough frames for several wave periods.
+- **Ocean waves are too coarse or die out:** a wave lower than about one
+  simulation cell does not travel — the liquid surface holds it as flat steps.
+  At 20 m tank length resolution 160 gives 12.5 cm cells and Draft halves that
+  resolution, so small waves need Draft off and a higher resolution (Calm uses
+  200), or a smaller tank. Bake enough frames: waves need about 10 s to reach
+  the middle of a 20 m tank.
+- **Ocean waves do not reach the far end / the water only sloshes at the wall:**
+  tanks made before 0.20 still use the old paddle, which barely makes travelling
+  waves. Click **Upgrade Wave Maker** in the tank's panel, then Bake Again.
 - **Ocean waves do not hit a rock:** place it inside the tank and add it to Water
-  Obstacles. The paddle is an internal effector and does not need adding there.
+  Obstacles. The wave maker is part of the tank and does not need adding there.
+- **Other force fields have no effect on the tank:** each tank only listens to
+  force fields in its own collection, so its calibrated waves stay as set. Move
+  a field into the tank's collection to make it push the water.
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.

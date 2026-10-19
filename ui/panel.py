@@ -276,8 +276,9 @@ def _draw_whitewater(box, entry):
 
 
 def _draw_wave_limit(box, entry):
-    """Say so when the requested waves would break at the paddle and were
-    capped — and what to change to get taller ones."""
+    """Say so when the requested waves would break and were capped — and
+    what to change to get taller ones.  Tanks from before 0.20 still have
+    the paddle, whose waves barely travel: offer the upgrade."""
     from ..level2 import simulated_ocean
     height, _amplitude = simulated_ocean.wave_plan(entry)
     if height < entry.wave_height - 0.005:
@@ -285,6 +286,9 @@ def _draw_wave_limit(box, entry):
         row.alert = True
         row.label(text=f"Waves this steep break — capped at {height:.2f} m. "
                        "Raise Period for taller waves", icon='INFO')
+    if simulated_ocean.is_legacy(entry):
+        box.label(text="This tank uses the old paddle; its waves barely travel", icon='INFO')
+        box.operator('aquasuite.simulated_ocean_upgrade', icon='FILE_REFRESH').uuid = entry.uuid
 
 
 def _draw_spec(box, context, entry):

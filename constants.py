@@ -123,6 +123,9 @@ REGIME_PARAMS = {
 MSG = {
     "E011": "That object already belongs to a AquaSuite assembly — detach or delete it first.",
     "E020": "Save the .blend first — caches are stored next to the file.",
+    "E021": ("The bake folder's path is too long for Windows ({n} characters; at most "
+             "{limit}): Blender would finish the bake without saving the liquid surface. "
+             "Save the .blend in a shorter folder, such as C:\\Projects, and bake again."),
     "W004": "Very fine ocean grid: consider Resolution ≤ 256.",
     "W007": "A floater lost its ocean and was detached automatically.",
     "W009": "Scene FPS below 12 — ripple simulation can become unstable at this timebase.",

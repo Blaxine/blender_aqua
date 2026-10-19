@@ -43,8 +43,9 @@ before introducing it anywhere else.
 | Preset | An editable package applied once to a liquid assembly. | Saved values and a snapshot are independent of future catalogue changes. |
 | Whitewater | Secondary Spray, Foam and Bubbles created by Mantaflow. | Draft suspends them; Amount and render Size are per element. |
 | Render Layers setup | Material Cryptomatte plus AQS_Liquid, AQS_Spray, AQS_Foam and AQS_Bubbles scalar AOVs on the active view layer. | Does not create additional view layers. |
-| Ocean (Simulated) | A Beta liquid wave tank, filled once and driven by a paddle. | Separate from the procedural Gerstner ocean; no buoy support. |
-| Wave Paddle | A tagged fluid effector driven by a sine F-Curve modifier. | Wave Height controls stroke; Wave Period is seconds per cycle. |
+| Ocean (Simulated) | A Beta liquid wave tank, filled once and driven by a wave maker. | Separate from the procedural Gerstner ocean; no buoy support. |
+| Wave Maker | A tagged Wind force field over a full-depth zone at the tank's left wall; a sine F-Curve modifier drives its strength. | Wave Height sets the strength (linear theory); Wave Period is seconds per wave. |
+| Wave Paddle | The pre-0.20 wave maker: a tagged collision effector moved by a sine F-Curve modifier. | Kept in old tanks until Upgrade Wave Maker replaces it. |
 | Simple view | Default per-setup view with the most useful look controls and actions. | UI state only; saved with the setup. |
 | Advanced view | Per-setup gear toggle revealing all controls. | Also reveals scene memory information and render-layer setup. |
 | Control specification | Ordered per-mode control IDs used by the panel and headless tests. | `ui/control_spec.py` |

@@ -60,16 +60,34 @@ Done by an agent on Blender 4.5.x and 5.2.2 LTS (5.1 and 4.1 were not available)
   built inside the repo no longer get packed into the next one
   (`test_package` caught this).
 
+## 0.20.0 wave maker — 2026-10-19
+
+Done by an agent on Blender 4.5 (and the fast suite on 5.2.2). Details and
+measurements are in [REMAINING_WORK.md](REMAINING_WORK.md) (S020, S023).
+
+- **S020 wave generation fixed:** new Ocean (Simulated) tanks use a
+  sine-driven Wind force field over a full-depth zone at the left wall, with
+  its strength from linear surface-pressure wave theory and Blender's
+  measured force scaling (0.2·strength·fps m/s²). Mid-tank heights reach
+  0.14 / 0.40 / 0.94 m for Calm / Rolling / Storm (targets 0.12 / 0.45 /
+  0.90 m) with volume within 0.13%. Calm's resolution rose to 200 because
+  waves under one cell do not travel.
+- **Old files:** paddle tanks keep the 0.19 paddle path; an Upgrade Wave
+  Maker button replaces it on request.
+- **S023 metric replaced:** the ocean bake test measures mid-tank wave height
+  at fixed gauges over the last full period, wall height and volume.
+
 ## Open acceptance gates
 
 - No in-app panel/window smoke test or Cycles/EEVEE visual render review has
   been performed here. Blender 4.2 specifically is not installed; 4.1 exercises
   the legacy API path but is below the extension's declared minimum version.
-- S019–S021: user has no visual observations yet. Only Storm Surf's period
-  and the stroke derivation changed (physics, not taste); S020's wave
-  generator replacement is open and blocks tuning the ocean presets.
-- S023: run on Blender 4.5 in 0.19.1 (see REMAINING_WORK.md); not accepted,
-  because its metric measures paddle slosh rather than travelling waves.
+- S019–S021: user has no visual observations yet. Storm Surf's period, the
+  wave maker (0.20.0) and Calm's resolution changed (physics, not taste);
+  the ocean presets can now be reviewed and tuned.
+- S023: passes on Blender 4.5 with the 0.20.0 mid-tank metric (see
+  REMAINING_WORK.md); not accepted until its provisional thresholds are
+  checked against renders (S019) and it is run on 5.1.
 - S028: sessions with 3–5 beginners require real participants. Protocol and
   observation table are in RELEASE_CHECKLIST.md; no sessions are claimed.
 

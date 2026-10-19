@@ -49,9 +49,11 @@ CATALOG = {
     'HOSE_SPRINKLER': _package(C.MODE_HOSE, 'Sprinkler', draft=False, spray=0.55,
                               foam=0.25, regime='SPRAY', pressure=0.5,
                               spread=25.0, nozzle_radius=0.025, hose_liquid=True),
-    # Calm and Rolling need ~12 cm cells: at Draft resolution 48 a cell is
-    # 42 cm, larger than the waves (measured: both read as settling slosh).
-    'OCEAN_CALM': _package(C.MODE_SIMOCEAN, 'Calm', resolution=160, draft=False,
+    # Waves under about one cell high do not travel: Mantaflow's surface
+    # holds sub-cell slopes as flat terraces.  Calm's 0.12 m waves need
+    # 10 cm cells (at 12.5 cm they die within 3 m of the wave maker);
+    # Rolling and Storm span 3+ cells at 12.5 cm.
+    'OCEAN_CALM': _package(C.MODE_SIMOCEAN, 'Calm', resolution=200, draft=False,
                           wave_height=0.12,
                           wave_period=3.5, tank_size=(20.0, 8.0, 4.0)),
     'OCEAN_ROLLING': _package(C.MODE_SIMOCEAN, 'Rolling Waves', resolution=160,
@@ -60,7 +62,7 @@ CATALOG = {
     'OCEAN_STORM': _package(C.MODE_SIMOCEAN, 'Storm Surf', resolution=160, draft=False,
                            spray=0.8, foam=0.85, bubbles=0.4, wave_height=0.9,
                            # 0.9 m needs a long period to stay below the
-                           # breaking limit (at 1.5 s it broke at the paddle).
+                           # breaking limit (at 1.5 s it broke where it was made).
                            wave_period=2.8, tank_size=(20.0, 8.0, 4.0)),
 }
 DEFAULTS = {C.MODE_STILL: 'STILL_CALM', C.MODE_SIMRAIN: 'RAIN_RAIN',

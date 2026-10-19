@@ -6,20 +6,22 @@ included in the extension zip.)
 
 Version under test: `________`  Date: `________`
 
-## Feature review gate (introduced in 0.18.0; still open in 0.19.1)
+## Feature review gate (introduced in 0.18.0; still open in 0.20.0)
 
 Automated checks for several of these exist (see the coverage table in
 [PRESET_REVIEW.md](PRESET_REVIEW.md)); a box is ticked only when the check was
 **run in Blender 5.1** for the version under test, not when a test exists.
-Simulated-ocean waves do not propagate yet (S020 in
-[REMAINING_WORK.md](REMAINING_WORK.md)), so the ocean items below cannot pass
-until its wave generator is replaced.
+0.20.0 replaced the simulated-ocean paddle with a force-field wave maker whose
+waves travel (S020 in [REMAINING_WORK.md](REMAINING_WORK.md)); the ocean items
+below still need a 5.1 run and a look at the renders.
 
 - [ ] Complete [the preset manual review](PRESET_REVIEW.md) in Blender 5.1.
 - [ ] All twelve presets produce distinct, usable baked results.
 - [ ] Whitewater renders in Cycles and EEVEE after off/on and Draft transitions.
 - [ ] Cryptomatte and all four AOV masks separate the intended elements.
 - [ ] Simulated-ocean waves propagate, hit an obstacle, and differ by preset.
+- [ ] A pre-0.20 paddle tank opens and bakes as before; Upgrade Wave Maker
+      replaces the paddle and the re-bake shows travelling waves.
 - [ ] A v0.16.1 scene opens unchanged; save/reload preserves adopted controls.
 - [ ] `python tests/run_tests.py --bake` passes, including `test_presets.py`,
       `test_whitewater.py` and `test_simulated_ocean.py`. Implementation alone does

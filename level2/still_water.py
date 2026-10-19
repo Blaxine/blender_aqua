@@ -251,8 +251,50 @@ def find_domain_object(entry):
 
 
 import contextlib
+import os
+import sys
 
 MEMORY_CONFIRM_GB = 2.0
+# Windows refuses paths of 260 characters or more.  Mantaflow then skips the
+# file without an error: Bake All "completes", the shorter data files are
+# all there, and the liquid mesh or whitewater is simply missing (measured
+# on Blender 4.5: mesh paths of 257 characters written, 260-262 not).
+WINDOWS_PATH_LIMIT = 260
+_CACHE_EXT = {"OPENVDB": ".vdb", "UNI": ".uni", "RAW": ".raw",
+              "BOBJECT": ".bobj.gz", "OBJECT": ".obj"}
+
+
+def longest_cache_path(ds):
+    """The longest file path this domain's bake will write (Mantaflow's
+    modular cache names: <dir>/fluid_<dir>_<frame>.<ext>)."""
+    root = os.path.normpath(bpy.path.abspath(ds.cache_directory))
+    frame = "0" * max(4, len(str(ds.cache_frame_end)))
+    data = getattr(ds, "cache_data_format", "OPENVDB")
+    outputs = [("data", "data", data)]
+    if getattr(ds, "use_mesh", False):
+        outputs.append(("mesh", "mesh", getattr(ds, "cache_mesh_format", "BOBJECT")))
+    if any(getattr(ds, f, False) for f in ("use_spray_particles", "use_foam_particles",
+                                           "use_bubble_particles", "use_tracer_particles")):
+        # A dynamic enum that reads '' on 4.5/5.2; the files follow the data format.
+        outputs.append(("particles", "particles",
+                        getattr(ds, "cache_particle_format", "") or data))
+    if getattr(ds, "use_guide", False):
+        outputs.append(("guiding", "guiding", data))
+    if getattr(ds, "use_noise", False) and ds.domain_type == "GAS":
+        outputs.append(("noise", "noise", getattr(ds, "cache_noise_format", "OPENVDB")))
+    # An unknown format counts as the longest known extension.
+    paths = [os.path.join(root, folder, f"fluid_{name}_{frame}{_CACHE_EXT.get(fmt, '.bobj.gz')}")
+             for folder, name, fmt in outputs]
+    return max(paths, key=len)
+
+
+def cache_path_too_long(ds):
+    """Length of the longest cache path when Windows would silently drop
+    it, else 0."""
+    if sys.platform != "win32":
+        return 0
+    n = len(longest_cache_path(ds))
+    return n if n >= WINDOWS_PATH_LIMIT else 0
 
 
 def estimated_memory_gb(entry):
@@ -316,7 +358,13 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
         bake starts anyway (and that the next status message hides) is no
         protection against an out-of-memory crash."""
         try:
-            gb = estimated_memory_gb(registry.get(context.scene, self.uuid))
+            entry = registry.get(context.scene, self.uuid)
+            gb = estimated_memory_gb(entry)
+            # Don't ask to confirm a bake that execute() will refuse.
+            from ..core import presets
+            _dom, ds = presets.domain(entry)
+            if ds is not None and cache_path_too_long(ds):
+                gb = 0.0
         except Exception:
             gb = 0.0
         if gb <= MEMORY_CONFIRM_GB:
@@ -357,9 +405,23 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
         # Ensure the domain is selectable/visible for the operator.
         # Rebind render instances if Mantaflow recreated any secondary systems.
         whitewater.apply(entry)
+        # After whitewater.apply: its flags decide whether particle files
+        # (the longest names) are written.
+        too_long = cache_path_too_long(dmod.domain_settings) if dmod is not None else 0
+        if too_long:
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't start the bake",
+                               message="AQS-E021: " + C.MSG["E021"].format(
+                                   n=too_long, limit=WINDOWS_PATH_LIMIT - 1),
+                               mode=entry.mode, uuid=self.uuid)
         was_hidden = dom.hide_get() if hasattr(dom, "hide_get") else False
         if was_hidden:
             dom.hide_set(False)
+        from . import simulated_ocean
+        if entry.mode == C.MODE_SIMOCEAN and not simulated_ocean.is_legacy(entry):
+            # The wave maker's strength depends on fps and its fade-in on
+            # the cache start, which may have changed since it was set.
+            simulated_ocean.apply_period(entry)
         # Living obstacle rule: (re)register Collision-enabled meshes as
         # effectors NOW, so objects added after creation block the water.
         try:
