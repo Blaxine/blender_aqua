@@ -7,6 +7,7 @@ Advanced lists the complete view, including Simple controls.
 from .. import constants as C
 
 SIMPLE = {
+    C.MODE_LIGHTING: ('entry:sun_strength', 'entry:sun_angle'),
     C.MODE_OCEAN: ('ocean:Amplitude', 'ocean:Wavelength', 'ocean:Speed', 'floaters'),
     C.MODE_RAIN: ('particles:count',),
     C.MODE_SNOW: ('particles:count',),
@@ -17,6 +18,7 @@ SIMPLE = {
     C.MODE_SIMOCEAN: ('preset', 'entry:wave_height', 'entry:wave_period', 'obstacles', 'bake'),
 }
 ADVANCED = {
+    C.MODE_LIGHTING: ('entry:sun_strength', 'entry:sun_angle', 'lighting_details'),
     C.MODE_OCEAN: tuple('ocean:' + p for p in ('Size', 'Resolution', 'Amplitude', 'Wavelength', 'Choppiness', 'Direction', 'Spread', 'Speed')) + ('floaters',),
     C.MODE_RAIN: ('particles:count', 'particles:lifetime', 'particles:particle_size'),
     C.MODE_SNOW: ('particles:count', 'particles:lifetime', 'particles:particle_size'),

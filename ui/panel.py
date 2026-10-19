@@ -331,6 +331,18 @@ def _draw_spec(box, context, entry):
                 box.operator('aquasuite.' + op_id, text=label).uuid = entry.uuid
         elif control == 'preset':
             _draw_preset(box, entry)
+        elif control == 'lighting_details':
+            import json
+            from ..core import lighting
+            sky = lighting.sky_node(entry)
+            if sky:
+                box.prop(sky, 'sky_type')
+            changed = json.loads(entry.light_restore or '{}')
+            box.label(text='Changed settings (restored on Delete):')
+            for path in changed:
+                box.label(text=path, icon='CHECKMARK')
+            if not changed:
+                box.label(text='Render settings were already suitable')
         elif control == 'fluid':
             _draw_fluid_settings(box, entry)
         elif control == 'whitewater':
@@ -496,6 +508,10 @@ class AQS_PT_water(bpy.types.Panel):
         scene = context.scene
 
         layout.prop(scene, "aqs_quality", text="Quality")
+        from ..core import lighting
+        if lighting.suggested(scene):
+            layout.label(text='Water may look invisible without lighting', icon='INFO')
+            layout.operator('aquasuite.water_lighting')
         entries = registry.entries(scene)
         advanced = control_spec.advanced_visible(entries)
         from ..core import memory
@@ -506,6 +522,9 @@ class AQS_PT_water(bpy.types.Panel):
 
         create = layout.box()
         create.label(text="Create", icon="ADD")
+        row = create.row()
+        row.enabled = lighting.existing(scene) is None
+        row.operator('aquasuite.water_lighting', icon='LIGHT_SUN')
         row = create.row(align=True)
         row.operator("aquasuite.ocean_create", text="Ocean", icon=C.MODE_ICONS[C.MODE_OCEAN])
         row.operator("aquasuite.rain_create", text="Rain", icon=C.MODE_ICONS[C.MODE_RAIN])

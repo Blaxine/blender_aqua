@@ -27,6 +27,10 @@ def _pset(node, names, value):
 def _new_mat(name, mode, uuid_):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
+    if hasattr(mat, 'use_raytrace_refraction'):
+        mat.use_raytrace_refraction = True
+    elif hasattr(mat, 'use_screen_refraction'):
+        mat.use_screen_refraction = True
     naming.tag(mat, mode, uuid_)
     return mat
 

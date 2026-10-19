@@ -21,7 +21,7 @@ CACHE_ROOT = "aquasuite_cache"
 
 # Datablock collections that can carry an ``aqs_owner`` tag.
 _TAGGED_COLLECTIONS = ("objects", "meshes", "particles", "node_groups",
-                       "materials", "collections", "actions")
+                       "materials", "collections", "actions", "worlds", "lights")
 
 
 def restore_buoy(b):
@@ -157,6 +157,8 @@ def remove_cache(assembly_uuid):
 def delete_assembly(scene, assembly_uuid, delete_cache=False):
     entry = registry.get(scene, assembly_uuid)
     if entry is not None:
+        from . import lighting
+        lighting.restore(scene, entry)
         _restore_buoys(entry)
         _restore_source(entry)
     _release_effectors(assembly_uuid)
@@ -169,6 +171,8 @@ def delete_assembly(scene, assembly_uuid, delete_cache=False):
     _remove_tagged(d.materials, assembly_uuid, lambda m: d.materials.remove(m))
     _remove_tagged(d.collections, assembly_uuid, lambda c: d.collections.remove(c))
     _remove_tagged(d.actions, assembly_uuid, lambda a: d.actions.remove(a))
+    _remove_tagged(d.worlds, assembly_uuid, lambda w: d.worlds.remove(w))
+    _remove_tagged(d.lights, assembly_uuid, lambda l: d.lights.remove(l))
 
     registry.remove(scene, assembly_uuid)
 

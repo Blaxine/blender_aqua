@@ -15,6 +15,7 @@ from bpy.props import CollectionProperty, EnumProperty, PointerProperty
 from . import constants as C
 from .core import registry, handlers, quality, errors, bakes, obstacles
 from .core import presets, whitewater, render_layers
+from .core import lighting
 from .level1 import ocean, rain, rain_reactive, snow
 from .level2 import still_water, rain_sim
 from .level2 import simulated_ocean
@@ -23,7 +24,7 @@ from .ui import panel, beta
 
 
 _MODULES = (errors, bakes, obstacles, ocean, rain, rain_reactive, snow, still_water, rain_sim,
-            hose, simulated_ocean, presets, render_layers, panel, beta)
+            hose, simulated_ocean, presets, render_layers, lighting, panel, beta)
 
 
 def _all_classes():

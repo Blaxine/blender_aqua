@@ -182,7 +182,19 @@ def _period_update(self, context):
     presets.note_edit(self)
 
 
+@errors.guard_update("AquaSuite couldn't adjust the lighting")
+def _lighting_update(self, context):
+    from . import lighting
+    lighting.update(self, context)
+
+
 class AQS_AssemblyEntry(bpy.types.PropertyGroup):
+    light_previous_world: PointerProperty(type=bpy.types.World)
+    light_world: PointerProperty(type=bpy.types.World)
+    light_restore: StringProperty(default='')
+    sun_strength: FloatProperty(name='Sun Strength', default=2.0, min=0, soft_max=10, update=_lighting_update)
+    sun_angle: FloatProperty(name='Sun Angle', default=0.610865, min=0.01, max=1.570796,
+        subtype='ANGLE', update=_lighting_update, description='Sun elevation above the horizon')
     show_advanced: BoolProperty(name='Advanced', default=False,
         description='Show all controls for this setup')
     uuid: StringProperty()
