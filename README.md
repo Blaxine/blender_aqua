@@ -233,7 +233,9 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
 - 0.20.0: Ocean (Simulated) makes waves with a force-field wave maker instead
   of a paddle, so waves now travel down the tank and reach about their target
   height mid-tank (Calm, Rolling Waves and Storm Surf were measured). Old tanks
-  keep their paddle until you choose Upgrade Wave Maker.
+  keep their paddle until you choose Upgrade Wave Maker. The hose's cone now
+  points where the water goes, so aiming the cone aims the jet (hoses saved
+  earlier keep spraying where they did).
 - 0.19.1 fixes: deleting Water Lighting no longer strips the sky from
   another scene that uses it; Ocean (Simulated) caps waves that would break,
   and Storm Surf uses a 2.8 s period so its 0.9 m waves can exist. Plane

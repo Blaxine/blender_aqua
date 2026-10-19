@@ -3,7 +3,7 @@
 import math
 import bpy
 import bmesh
-from mathutils import Vector
+from mathutils import Matrix, Vector
 from . import lighting, obstacles, delete
 from ..level1 import ocean
 
@@ -65,7 +65,10 @@ def build(context):
             scene.cursor.location = (1.5, 0, 2)
             _require(bpy.ops.aquasuite.hose_create())
             hose = scene.aqs_assemblies[-1]
-            hose.primary.rotation_euler = (0, math.radians(-75), 0)
+            # Cone (+Y) tipped down, then swung 75 degrees toward +X: the jet
+            # leaves slightly downward at the wall.
+            hose.primary.rotation_euler = (Matrix.Rotation(math.radians(-75), 3, 'Y')
+                                           @ Matrix.Rotation(-math.pi / 2, 3, 'X')).to_euler()
             hose.pressure = .7
             wall = _box(scene, 'Demo Obstacle Wall', (5, 0, 1.2), (.35, 4, 2.4), (.22, .28, .32))
             ground = _box(scene, 'Demo Ground', (2, 0, -.2), (8, 7, .25), (.12, .15, .18))
