@@ -512,6 +512,7 @@ class AQS_PT_water(bpy.types.Panel):
         if lighting.suggested(scene):
             layout.label(text='Water may look invisible without lighting', icon='INFO')
             layout.operator('aquasuite.water_lighting')
+        layout.operator('aquasuite.load_demo', icon='SCENE_DATA')
         entries = registry.entries(scene)
         advanced = control_spec.advanced_visible(entries)
         from ..core import memory
