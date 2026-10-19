@@ -15,9 +15,10 @@ import bpy  # noqa: E402
 
 FORBIDDEN = ("requirements/", "tests/", ".git", "__pycache__", "aquasuite_cache",
              "public_repo/", "docs/TESTING.md", "docs/THESAURUS.md",
-             "docs/RELEASE_CHECKLIST.md")
+             "docs/RELEASE_CHECKLIST.md", "docs/REQ003_REVIEW.md")
 REQUIRED = ("__init__.py", "README.md", "docs/TROUBLESHOOTING.md", "blender_manifest.toml", "constants.py", "core/errors.py",
-            "core/registry.py", "level2/rain_sim.py", "ui/panel.py", "ui/beta.py")
+            "core/registry.py", "core/lighting.py", "core/demo.py", "ui/control_spec.py",
+            "level2/rain_sim.py", "ui/panel.py", "ui/beta.py")
 
 LOAD_SCRIPT = r'''
 import importlib.util, os, sys
@@ -28,8 +29,10 @@ spec = importlib.util.spec_from_file_location("aquasuite", os.path.join(pkg, "__
 mod = importlib.util.module_from_spec(spec); sys.modules["aquasuite"] = mod
 spec.loader.exec_module(mod); mod.register()
 import bpy
+bpy.context.view_layer.objects.active = bpy.data.objects['Cube']
+bpy.ops.aquasuite.still_water_create()
 for op in ("ocean_create", "rain_create", "rain_reactive_create", "snow_create",
-           "hose_create", "rain_sim_create"):
+           "hose_create", "rain_sim_create", "simulated_ocean_create", "water_lighting"):
     getattr(bpy.ops.aquasuite, op)()
 n = len(bpy.context.scene.aqs_assemblies)
 for u in [e.uuid for e in bpy.context.scene.aqs_assemblies]:
@@ -75,7 +78,7 @@ def test_package():
     code, out = _blender("-b", "--python-expr", LOAD_SCRIPT, "--", pkg)
     loaded = [ln for ln in out.splitlines() if ln.startswith("ZIPLOAD")]
     lib.check("add-on from the zip registers and runs every mode",
-              code == 0 and loaded == ["ZIPLOAD 6"],
+              code == 0 and loaded == ["ZIPLOAD 9"],
               f"exit {code}: " + (loaded or [out.strip()[-300:]])[0])
 
 

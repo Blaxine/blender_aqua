@@ -41,4 +41,5 @@ paths_exclude_pattern = [
   "/docs/TESTING.md",
   "/docs/THESAURUS.md",
   "/docs/RELEASE_CHECKLIST.md",
+  "/docs/REQ003_REVIEW.md",
 ]

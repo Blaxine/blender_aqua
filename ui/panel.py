@@ -52,20 +52,6 @@ def _fmt_size(mb):
     return f"{mb / 1024.0:.1f} GB" if mb >= 1024.0 else f"{mb:.0f} MB"
 
 
-def _draw_ocean(box, context, entry):
-    surf = entry.primary
-    mod = ocean_mod.find_ocean_modifier(surf, entry.uuid)
-    if mod is None:
-        box.label(text="Surface missing", icon="ERROR")
-        return
-    colm = box.column(align=True)
-    for name, *_rest in ocean_mod.INPUTS:
-        ident = ocean_mod._socket_identifier(mod, name)
-        if ident:
-            colm.prop(mod, f'["{ident}"]', text=name)
-    _draw_floaters(box, entry)
-
-
 def _draw_floaters(box, entry):
     row = box.row()
     row.label(text=f"Buoys: {len(entry.buoys)}")
@@ -289,15 +275,17 @@ def _draw_whitewater(box, entry):
         warn.label(text=entry.ww_warning, icon='ERROR')
 
 
-def _draw_simulated_ocean(box, entry, context):
-    _draw_spec(box, context, entry)
-
-
 def _draw_spec(box, context, entry):
+    root = box
+    baking = bakes.is_baking(entry)
     for control in control_spec.controls(entry.mode, entry.show_advanced):
+        # Keep Cancel/Bake live, but do not alter a running simulation through
+        # a preset button or one of the grouped advanced controls.
+        box = root.column()
+        box.enabled = not baking or control in ('bake', 'ripples', 'hose_liquid_controls')
         if control.startswith('entry:'):
             row = box.row()
-            row.enabled = not bakes.is_baking(entry)
+            row.enabled = not baking
             name = control.split(':', 1)[1]
             labels = {'rain_density': 'Drop Amount', 'rain_speed': 'Speed', 'rain_angle': 'Angle', 'hose_color': 'Water Color'}
             row.prop(entry, name, **({'text': labels[name]} if name in labels else {}))
@@ -312,7 +300,8 @@ def _draw_spec(box, context, entry):
         elif control == 'floaters':
             _draw_floaters(box, entry)
         elif control == 'resolution_buttons':
-            _draw_resolution_buttons(box, entry)
+            if 'fluid' not in control_spec.controls(entry.mode, entry.show_advanced):
+                _draw_resolution_buttons(box, entry)
         elif control == 'ripples':
             _draw_bake(box, entry, 'aquasuite.bake_ripples', mandatory=False)
         elif control == 'regimes':
@@ -353,73 +342,6 @@ def _draw_spec(box, context, entry):
             _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_fluid')
 
 
-def _draw_rain_sim(box, entry, context):
-    _draw_preset(box, entry)
-    colm = box.column(align=True)
-    colm.prop(entry, "rain_speed")
-    colm.prop(entry, "rain_angle")
-    colm.prop(entry, "rain_direction")
-    colm.prop(entry, "rain_area")
-
-    from ..level2.rain_sim import (find_emitter, _drops_modifier,
-                                   is_legacy_tree)
-    gnmod = _drops_modifier(find_emitter(entry), entry.uuid)
-    legacy = gnmod is not None and is_legacy_tree(gnmod)
-    if gnmod is not None:
-        drops = box.column(align=True)
-        drops.label(text="Drops", icon="MOD_FLUIDSIM")
-        from ..level2.rain_sim import find_rain_drops
-        visible = find_rain_drops(entry)
-        visible_mod = _drops_modifier(visible, entry.uuid) if visible else None
-        if visible_mod and not legacy and ocean_mod.get_input(visible_mod, 'Viewport Fraction') is None:
-            upgrade = drops.row()
-            upgrade.enabled = not bakes.is_baking(entry)
-            op = upgrade.operator('aquasuite.rain_sim_optimize', icon='MOD_PARTICLES')
-            op.uuid = entry.uuid
-        drops.prop(entry, "rain_density")
-        drops.prop(entry, "drop_size")
-        drops.prop(entry, "splash_amount")
-        drops.prop(entry, "rain_seed")
-
-    if gnmod is None or legacy:
-        sub = box.row()
-        sub.alert = True
-        text = "Emitter missing — Rebuild" if gnmod is None \
-            else "Old rain emitter — Rebuild"
-        op = sub.operator("aquasuite.rain_sim_rebuild_emitter",
-                          text=text, icon="ERROR")
-        op.uuid = entry.uuid
-    else:
-        sub = box.row(align=True)
-        op = sub.operator("aquasuite.rain_sim_rebuild_emitter",
-                          text="Rebuild Emitter", icon="FILE_REFRESH")
-        op.uuid = entry.uuid
-        op = sub.operator("aquasuite.rain_sim_check",
-                          text="Check Pool Link", icon="VIEWZOOM")
-        op.uuid = entry.uuid
-
-    row = box.row(align=True)
-    row.label(text=f"Pool meshes: {len(entry.pool_sources)}",
-              icon="OUTLINER_COLLECTION")
-    op = row.operator("aquasuite.rain_sim_add_pool", text="", icon="ADD")
-    op.uuid = entry.uuid
-    for rec in entry.pool_sources:
-        sub = box.row()
-        sub.enabled = False
-        sub.label(text=rec.obj.name if rec.obj else "<missing>",
-                  icon="MATFLUID")
-
-    _draw_obstacles(box, context)
-    row = box.row(align=True)
-    row.prop(entry, "draft", toggle=True)
-    op = row.operator("aquasuite.rain_sim_fit_domain", text="Fit Domain",
-                      icon="SHADING_BBOX")
-    op.uuid = entry.uuid
-    _draw_fluid_settings(box, entry)
-    _draw_whitewater(box, entry)
-    _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
-
-
 def _draw_obstacles(box, context):
     """Shared by every liquid setup: the scene's Water Obstacles."""
     from ..core import obstacles
@@ -430,15 +352,6 @@ def _draw_obstacles(box, context):
     sub = row.row(align=True)
     sub.enabled = n > 0
     sub.operator("aquasuite.obstacles_remove", text="", icon="REMOVE")
-
-
-def _draw_hose(box, entry, context):
-    _draw_regimes(box, entry)
-    colm = box.column(align=True)
-    for name in ('pressure', 'spread', 'nozzle_radius', 'hose_color'):
-        colm.prop(entry, name)
-    _draw_obstacles(box, context)
-    _draw_hose_liquid(box, entry, context)
 
 
 def _draw_regimes(box, entry):
@@ -452,6 +365,9 @@ def _draw_regimes(box, entry):
 
 
 def _draw_hose_liquid(box, entry, context):
+    root = box
+    box = root.column()
+    box.enabled = not bakes.is_baking(entry)
     if entry.regime == C.REGIME_MIST:
         return
     row = box.row(align=True)
@@ -479,7 +395,7 @@ def _draw_hose_liquid(box, entry, context):
     op.uuid = entry.uuid
     _draw_fluid_settings(box, entry)
     _draw_whitewater(box, entry)
-    _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
+    _draw_bake(root, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
 
 
 def _draw_pre_release(box, entry):
@@ -576,30 +492,7 @@ class AQS_PT_water(bpy.types.Panel):
                 errors.schedule()
 
     def _draw_entry(self, box, context, entry):
-        if entry.mode in control_spec.SIMPLE:
-            _draw_spec(box, context, entry)
-            return
-        if entry.mode == C.MODE_OCEAN:
-            _draw_ocean(box, context, entry)
-        elif entry.mode in (C.MODE_RAIN, C.MODE_SNOW):
-            _draw_particles(box, entry)
-        elif entry.mode == C.MODE_RRAIN:
-            _draw_particles(box, entry)
-            _draw_bake(box, entry, "aquasuite.bake_ripples", mandatory=False)
-        elif entry.mode == C.MODE_STILL:
-            _draw_preset(box, entry)
-            if entry.ww_managed:
-                box.prop(entry, 'draft', toggle=True)
-            _draw_obstacles(box, context)
-            _draw_fluid_settings(box, entry)
-            _draw_whitewater(box, entry)
-            _draw_bake(box, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
-        elif entry.mode == C.MODE_HOSE:
-            _draw_hose(box, entry, context)
-        elif entry.mode == C.MODE_SIMRAIN:
-            _draw_rain_sim(box, entry, context)
-        elif entry.mode == C.MODE_SIMOCEAN:
-            _draw_simulated_ocean(box, entry, context)
+        _draw_spec(box, context, entry)
 
 
 CLASSES = (AQS_OT_assembly_delete, AQS_OT_set_resolution,

@@ -24,13 +24,15 @@ def _pset(node, names, value):
     return False
 
 
+def _water_refraction(mat):
+    for flag in ('use_raytrace_refraction', 'use_screen_refraction'):
+        if hasattr(mat, flag):
+            setattr(mat, flag, True)
+
+
 def _new_mat(name, mode, uuid_):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
-    if hasattr(mat, 'use_raytrace_refraction'):
-        mat.use_raytrace_refraction = True
-    elif hasattr(mat, 'use_screen_refraction'):
-        mat.use_screen_refraction = True
     naming.tag(mat, mode, uuid_)
     return mat
 
@@ -49,6 +51,7 @@ def assign(obj, mat):
 
 def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
     mat = _new_mat(name, mode, uuid_)
+    _water_refraction(mat)
     nt = mat.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -71,6 +74,7 @@ def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
 
 def droplet(mode, uuid_):
     mat = _new_mat("AQS_MAT_Droplet", mode, uuid_)
+    _water_refraction(mat)
     nt = mat.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -173,6 +177,7 @@ def element_aov(mat, element, value_socket=None):
 
 def whitewater(mode, uuid_, element):
     mat = _new_mat('AQS_' + element.title(), mode, uuid_)
+    _water_refraction(mat)
     nt = mat.node_tree
     nt.nodes.clear()
     out = nt.nodes.new('ShaderNodeOutputMaterial')

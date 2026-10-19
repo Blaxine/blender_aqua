@@ -44,6 +44,8 @@ def test_demo_isolation_and_playback():
 
 def test_demo_failure_rolls_back():
     before_scenes, before_objects = set(bpy.data.scenes), set(bpy.data.objects)
+    groups = ('meshes', 'materials', 'worlds', 'lights', 'cameras', 'particles', 'node_groups', 'actions', 'collections')
+    before_data = {g: set(getattr(bpy.data, g)) for g in groups}
     original = lighting.create
     def fail(_scene):
         raise RuntimeError('forced demo failure')
@@ -57,6 +59,8 @@ def test_demo_failure_rolls_back():
         lighting.create = original
     lib.check('failed demo removes its scene and objects', set(bpy.data.scenes) == before_scenes
               and set(bpy.data.objects) == before_objects)
+    lib.check('failed demo removes all newly created datablocks',
+              all(set(getattr(bpy.data, g)) == before_data[g] for g in groups))
 
 
 lib.main(globals())

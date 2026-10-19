@@ -85,11 +85,17 @@ def build(context):
         for uid in [e.uuid for e in scene.aqs_assemblies]:
             delete.delete_assembly(scene, uid)
         bpy.data.scenes.remove(scene)
-        for name in groups:
-            collection = getattr(bpy.data, name)
-            for item in list(collection):
-                if item not in before[name] and (name in ('objects', 'collections') or item.users == 0):
-                    collection.remove(item)
+        # References between new node trees/materials/particle settings may
+        # release users only after another group has been swept.
+        removed = True
+        while removed:
+            removed = False
+            for name in groups:
+                collection = getattr(bpy.data, name)
+                for item in list(collection):
+                    if item not in before[name] and (name in ('objects', 'collections') or item.users == 0):
+                        collection.remove(item)
+                        removed = True
         raise
 
 

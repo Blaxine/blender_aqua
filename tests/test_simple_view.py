@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import aqs_testlib as lib
 import bpy
 from aquasuite.ui import control_spec
+from aquasuite.level1 import ocean
 
 
 def test_all_modes_and_one_click():
@@ -25,6 +26,10 @@ def test_spec_and_default():
         for token in control_spec.ADVANCED[mode]:
             if token.startswith('entry:'):
                 assert token.split(':')[1] in lib.registry.AQS_AssemblyEntry.bl_rna.properties
+            elif token.startswith('ocean:'):
+                assert token.split(':')[1] in {s[0] for s in ocean.INPUTS}
+            elif token.startswith('particles:'):
+                assert token.split(':')[1] in bpy.types.ParticleSettings.bl_rna.properties
     result = bpy.ops.aquasuite.simulated_ocean_create('INVOKE_DEFAULT')
     entry = lib.entry(lib.last_uuid())
     lib.check('ocean invokes immediately with default preset', result == {'FINISHED'} and entry.preset_id == 'OCEAN_ROLLING')

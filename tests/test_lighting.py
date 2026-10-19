@@ -43,4 +43,44 @@ def test_roundtrip_and_hint():
     scene.world = previous
 
 
+def test_cycles_restore_when_enabled():
+    import addon_utils
+    addon_utils.enable('cycles', default_set=False, persistent=False)
+    scene = lib.scene()
+    if not hasattr(scene, 'cycles'):
+        lib.skip('Cycles lighting restore', 'Cycles not available in this Blender')
+        return
+    scene.cycles.max_bounces = 4
+    scene.cycles.transmission_bounces = 2
+    scene.cycles.transparent_max_bounces = 3
+    engine = scene.render.engine
+    bpy.ops.aquasuite.water_lighting()
+    entry = lighting.existing(scene)
+    lib.check('Cycles lighting settings raised without switching engine',
+              scene.cycles.max_bounces == 12 and scene.cycles.transmission_bounces == 8
+              and scene.render.engine == engine)
+    delete.delete_assembly(scene, entry.uuid)
+    lib.check('Cycles settings restored exactly', (scene.cycles.max_bounces,
+              scene.cycles.transmission_bounces, scene.cycles.transparent_max_bounces) == (4, 2, 3))
+
+
+def test_lighting_failed_create_restores():
+    scene = lib.scene()
+    previous = scene.world
+    original = lighting.update
+    def fail(_entry):
+        raise RuntimeError('forced lighting failure')
+    lighting.update = fail
+    try:
+        try:
+            result = bpy.ops.aquasuite.water_lighting()
+        except RuntimeError as exc:
+            assert 'Forced lighting failure' in str(exc)
+            result = {'CANCELLED'}  # bpy.ops raises when an operator reports ERROR.
+    finally:
+        lighting.update = original
+    lib.check('lighting creation failure rolls back', result == {'CANCELLED'} and scene.world == previous
+              and lighting.existing(scene) is None)
+
+
 lib.main(globals())
