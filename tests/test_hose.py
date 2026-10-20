@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aqs_testlib as lib  # noqa: E402
 
 import bpy  # noqa: E402
-from mathutils import Euler  # noqa: E402
+from mathutils import Euler, Matrix, Vector  # noqa: E402
+from aquasuite.level2 import still_water as sw  # noqa: E402
 from aquasuite.level3 import hose  # noqa: E402
 
 C = lib.C
@@ -47,7 +48,9 @@ def test_setup():
     U["h"] = lib.last_uuid()
     noz = lib.entry(U["h"]).primary
     noz.location = (0, 0, 3)
-    noz.rotation_euler = Euler((0, math.radians(-60), 0))   # aim +X and down
+    # cone tipped down, then swung 60 degrees toward +X: aim +X and down
+    noz.rotation_euler = (Matrix.Rotation(math.radians(-60), 3, 'Y')
+                          @ Matrix.Rotation(-math.pi / 2, 3, 'X')).to_euler()
     bpy.context.view_layer.update()
     lib.check("hose created", lib.entry(U["h"]) is not None)
 
@@ -118,6 +121,48 @@ def test_water_color():
                         colors.append(tuple(round(c, 3) for c in node.inputs["Color"].default_value[:3]))
     lib.check("Water Color tints jet, mist and liquid materials",
               len(colors) >= 3 and all(c == (0.2, 0.6, 0.3) for c in colors), str(colors))
+
+
+
+def _cone_axis(nozzle):
+    """Where the Cone empty points: its local +Y."""
+    return (sw.world_matrix(nozzle).to_3x3() @ Vector((0, 1, 0))).normalized()
+
+
+def _disc_normal(emitter):
+    return (sw.world_matrix(emitter).to_3x3()
+            @ emitter.data.polygons[0].normal).normalized()
+
+
+def test_cone_shows_aim():
+    bpy.ops.aquasuite.hose_create()
+    e = lib.entry(lib.last_uuid())
+    noz, em = e.primary, hose._find_emitter(e)
+    aim = hose._aim_direction(noz)
+    lib.check("new hose: the cone points where the jet fires (straight down)",
+              aim.dot(_cone_axis(noz)) > 0.999 and aim.z < -0.999
+              and aim.dot(_disc_normal(em)) > 0.999,
+              f"aim {tuple(round(c, 3) for c in aim)}")
+
+    noz.rotation_euler = Euler((math.radians(-30), 0, math.radians(50)))
+    hose.fit_domain(bpy.context, e)
+    bpy.context.view_layer.update()
+    aim = hose._aim_direction(noz)
+    end = sw.world_matrix(noz).translation + aim * e.hose_range
+    dmin, dmax = sw.world_bbox(hose._find_domain(e))
+    lib.check("re-aimed hose: jet, emitter disc and fitted domain follow the cone",
+              aim.dot(_cone_axis(noz)) > 0.999 and aim.dot(_disc_normal(em)) > 0.999
+              and all(dmin[i] < end[i] < dmax[i] for i in range(3)),
+              f"aim {tuple(round(c, 3) for c in aim)}, cone "
+              f"{tuple(round(c, 3) for c in _cone_axis(noz))}")
+
+    # A rig saved before 0.20: untilted disc, jet along the nozzle's -Z.
+    noz.rotation_euler = (0.0, 0.0, 0.0)
+    em.rotation_euler = (0.0, 0.0, 0.0)
+    aim = hose._aim_direction(noz)
+    lib.check("older hose rigs keep spraying where they did (nozzle -Z)",
+              aim.z < -0.999 and aim.dot(_disc_normal(em)) > 0.999,
+              f"aim {tuple(round(c, 3) for c in aim)}")
 
 
 lib.main(globals())

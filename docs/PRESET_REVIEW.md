@@ -1,4 +1,36 @@
-# Preset manual review (current preview: 0.18.0)
+# Preset manual review (current preview: 0.20.0)
+
+## 0.20.0 changes to review — 2026-10-19
+
+- **New wave maker for all three ocean presets.** New tanks push the water
+  with a Wind force field over the 4 m next to the left wall instead of
+  moving a paddle, so waves now travel down the tank. Strength comes from
+  linear theory (no per-preset tuning). Measured mid-tank (x = −5…−3 m) after
+  12 s on Blender 4.5: Calm 0.14 m (target 0.12), Rolling Waves 0.40 m (0.45),
+  Storm Surf 0.94 m (0.90); see S020/S023 in
+  [REMAINING_WORK.md](REMAINING_WORK.md). Wave Height and Wave Period values
+  are unchanged.
+- **Calm resolution 160 → 200.** Its 0.12 m waves are one 12.5 cm cell high
+  and do not travel at 160. Bakes take about twice as long.
+- **To look at in the review:** the water within 4 m of the left wall moves
+  up and down more than mid-tank (Rolling 0.52 m there vs 0.40 m) — decide
+  whether it is visible in the shipped camera framings. Waves need ~10 s to
+  reach mid-tank; the default 144-frame cache shows them only half-way.
+- S021 can now tune the ocean presets: the generator no longer blocks it.
+
+## 0.19.1 changes to review — 2026-10-19
+
+- **Storm Surf period 1.5 s → 2.8 s.** Not a taste change: 0.9 m at 1.5 s is
+  steeper than any water wave can be (H/L ≈ 0.26 vs ≈ 0.142 breaking) and broke
+  at the paddle. Wave Height and the other presets' values are unchanged.
+- **Paddle stroke from wavemaker theory** for all three ocean presets, so the
+  paddle moves less than before for Rolling Waves (0.45 → 0.30 m stroke) and
+  slightly more for Calm (0.12 → 0.13 m). Too-steep requests are capped with a
+  red panel notice.
+- **Known limitation, not tuning:** the paddle barely drives travelling waves
+  in any preset (S020 in [REMAINING_WORK.md](REMAINING_WORK.md)). Do not tune
+  ocean preset values (S021) against the current paddle; review the other nine
+  presets as usual.
 
 ## REQ-003 review gate — 2026-10-18
 
@@ -74,14 +106,25 @@ Record the preset, engine, resolution/Draft, frame range, and the visible result
 for anything that fails. Exact preset values and the 20 × 8 × 4 m tank default
 are initial choices awaiting this review.
 
-## Deferred automated work
+## Automated coverage (reconciled 2026-10-19)
 
-- Extend create/delete, Beta and package tests to include the new mode/actions.
-- Check all twelve preset packages, modified snapshots and legacy hydration.
-- Check independent whitewater toggles, Draft restoration, renamed-system
-  ownership, orphan cleanup, and re-enabling render instances.
-- Check idempotent AOV setup and render actual element masks in both engines.
-- Bake each preset and measure liquid, secondary populations, wave propagation,
-  amplitude ordering and obstacle interaction.
-- Re-run the full suite with --bake on the supported test version; retain honest
-  reporting of the previously exposed Blender 4.1 shutdown crash.
+Implemented means a test exists; run means it was executed and the result is
+recorded. The 0.19.1 runs were on Blender 4.5 only.
+
+| Check | Implemented in | Run |
+|---|---|---|
+| Create/delete, Beta and package cover the new mode/actions | `test_create_delete`, `test_beta`, `test_package` | 4.5 (0.19.1); 5.1.2 + 4.1.1 (0.19.0) |
+| All twelve preset packages apply; modified marker | `test_presets` | same |
+| Whitewater toggles off/on, Draft suspends and restores, render-ready | `test_whitewater` | same |
+| Idempotent Cryptomatte + AOV setup | `test_presets` | same |
+| Each preset bakes liquid (16 frames, capped resolution) | `test_preset_bakes --bake` | 4.5 (0.19.1); 5.1.2 (0.19.0) |
+| Baked Spray/Foam/Bubbles have particles | `test_whitewater --bake` | 4.5 (0.19.1) |
+| Ocean mid-tank wave height per preset, wall, volume, ordering (288 frames) | `test_simulated_ocean --bake` | 4.5 (0.20.0), see S023 |
+| Wave-maker theory, steepness cap, zone/water placement, fps scaling | `test_simulated_ocean` | 4.5 + 5.2.2 (0.20.0) |
+| Legacy paddle tank unchanged after reload; Upgrade Wave Maker | `test_simulated_ocean` | 4.5 + 5.2.2 (0.20.0) |
+| Shared/fake-user lighting world survives delete | `test_lighting` | 4.5 (0.19.1) |
+
+Still not automated: legacy (v0.16.1) whitewater hydration from a real saved
+file, renamed legacy whitewater systems, rendered AOV mask contents in either
+engine, baked wave interaction with an obstacle, and a real pre-0.20 saved
+file (the legacy-tank test rebuilds a paddle tank in the current version).

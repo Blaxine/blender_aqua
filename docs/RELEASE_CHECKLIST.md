@@ -6,13 +6,22 @@ included in the extension zip.)
 
 Version under test: `________`  Date: `________`
 
-## 0.18.0 feature review gate
+## Feature review gate (introduced in 0.18.0; still open in 0.20.0)
+
+Automated checks for several of these exist (see the coverage table in
+[PRESET_REVIEW.md](PRESET_REVIEW.md)); a box is ticked only when the check was
+**run in Blender 5.1** for the version under test, not when a test exists.
+0.20.0 replaced the simulated-ocean paddle with a force-field wave maker whose
+waves travel (S020 in [REMAINING_WORK.md](REMAINING_WORK.md)); the ocean items
+below still need a 5.1 run and a look at the renders.
 
 - [ ] Complete [the preset manual review](PRESET_REVIEW.md) in Blender 5.1.
 - [ ] All twelve presets produce distinct, usable baked results.
 - [ ] Whitewater renders in Cycles and EEVEE after off/on and Draft transitions.
 - [ ] Cryptomatte and all four AOV masks separate the intended elements.
 - [ ] Simulated-ocean waves propagate, hit an obstacle, and differ by preset.
+- [ ] A pre-0.20 paddle tank opens and bakes as before; Upgrade Wave Maker
+      replaces the paddle and the re-bake shows travelling waves.
 - [ ] A v0.16.1 scene opens unchanged; save/reload preserves adopted controls.
 - [ ] `python tests/run_tests.py --bake` passes, including `test_presets.py`,
       `test_whitewater.py` and `test_simulated_ocean.py`. Implementation alone does
@@ -58,6 +67,8 @@ Version under test: `________`  Date: `________`
 
 ## 5. Errors and Beta notes
 
+- [ ] Water Lighting in scene A, assign its sky world to scene B, delete A's lighting: A gets its old world back and B keeps the sky (also after save/reopen)
+- [ ] Ocean (Simulated): set Wave Period to 1.5 s at Wave Height 0.9 m — a red "capped" notice appears; raise Period and it disappears
 - [ ] Unsaved file → Still Water → Bake: popup with a plain message and Copy Report
 - [ ] Copy Report → paste into a text editor: versions, OS, mode, message, traceback; **no** home folder, **no** .blend path or name
 - [ ] Restart Blender: no Beta note on creating a Beta mode again

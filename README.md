@@ -146,11 +146,24 @@ separate materials in a compositor Cryptomatte node, or use the AOV masks from
 Render Layers. No additional view layers are created. This action intentionally
 leaves those view-layer settings in place when an assembly is deleted.
 
-**Ocean (Simulated) · Beta** creates a closed tank, an initial water block and a
-sine-driven paddle. Wave Height controls paddle stroke; Wave Period is in seconds.
-Tank Size defaults to 20 × 8 × 4 metres. Place a rock inside the tank and add it to
-Water Obstacles, save, then bake. Draft is useful for layout; raise resolution for
-small waves. This mode does not use the procedural ocean's buoys or wake system.
+**Ocean (Simulated) · Beta** creates a closed tank filled with still water and a
+wave maker: a Wind force field whose push swings back and forth at the wave
+period over the first few metres of water next to the left wall, top to bottom.
+Wave Height is the target height mid-tank — the push is derived from it, the
+period and the water depth with linear wave theory — and Wave Period is in
+seconds. Waves too steep to exist (they would break where they are made) are
+capped, and the panel says so: raise Period for taller waves. Tank Size
+defaults to 20 × 8 × 4 metres. The push fades in over the first wave period;
+waves need about 10 seconds to reach the middle of a 20 m tank, so bake a long
+enough frame range. Place a rock inside the tank and add it to Water Obstacles,
+save, then bake. Waves smaller than about one simulation cell do not travel, so
+Draft (half resolution) is for layout only, and Calm uses a finer resolution
+than the other presets. This mode does not use the procedural ocean's buoys or
+wake system.
+
+Tanks made before 0.20 keep their original paddle and bake exactly as before.
+Their panel offers **Upgrade Wave Maker**, which swaps the paddle for the new
+wave maker (Bake Again afterwards).
 
 Existing setups initially show **Custom**. Their whitewater flags are read from
 the domain without applying a preset or modifying its solver/render setup. Edit
@@ -217,6 +230,18 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
   and Mist — that hit Water Obstacles and splash along them; Water Color
   tints it. *Simulate Liquid* (Beta) swaps the jet for a baked Mantaflow
   liquid when you need pools.
+- 0.20.0: Ocean (Simulated) makes waves with a force-field wave maker instead
+  of a paddle, so waves now travel down the tank and reach about their target
+  height mid-tank (Calm, Rolling Waves and Storm Surf were measured). Old tanks
+  keep their paddle until you choose Upgrade Wave Maker. The hose's cone now
+  points where the water goes, so aiming the cone aims the jet (hoses saved
+  earlier keep spraying where they did).
+- 0.19.1 fixes: deleting Water Lighting no longer strips the sky from
+  another scene that uses it; Ocean (Simulated) caps waves that would break,
+  and Storm Surf uses a 2.8 s period so its 0.9 m waves can exist. Plane
+  Ocean, Plane Rain and Rain Simulation work again on Blender 5.2, which
+  changed how Geometry Nodes modifier inputs and the Random Value node are
+  accessed.
 - If anything fails, a popup explains it in plain words and **Copy
   Report** puts a ready-to-paste bug report on your clipboard (personal
   paths removed).

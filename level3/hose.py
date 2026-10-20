@@ -18,6 +18,7 @@ import math
 
 import bpy
 import bmesh
+from mathutils import Matrix
 
 from .. import constants as C
 from ..core import delete, naming, registry
@@ -143,6 +144,10 @@ def blast_clamp(requested, dom, resolution, fps, ts_max, cfl, safety=0.8):
 CLAMP_PROP = "aqs_clamp"   # (velocity, timesteps_needed) while clamped
 NOZZLE_MIN_VOXELS = 0.75   # smallest emitting nozzle radius, in grid cells
 
+# Emitter disc orientation inside the nozzle: +90° about X carries the
+# disc's emitting -Z onto the nozzle's +Y, the axis a Cone empty draws.
+NOZZLE_TO_EMITTER = Matrix.Rotation(math.pi / 2.0, 3, "X")
+
 
 def _set_clamp(entry, value):
     if value is None:
@@ -158,12 +163,31 @@ def clamp_state(entry):
     return (float(v[0]), int(v[1])) if v else None
 
 
+def _nozzle_emitter(nozzle):
+    """The emitter disc parented to the nozzle (it carries the FLOW)."""
+    for child in nozzle.children:
+        for m in child.modifiers:
+            if m.type == "FLUID" and getattr(m, "fluid_type", "") == "FLOW":
+                return child
+    return None
+
+
 def _aim_direction(nozzle):
-    """World-space jet direction: the nozzle empty's local -Z (from its
-    current transform — matrix_world is stale right after creation)."""
+    """World-space jet direction, read from the emitter disc itself (from
+    its current transform — matrix_world is stale right after creation).
+
+    The disc emits along its own local -Z.  New rigs tilt it so that is
+    the nozzle's +Y, where the Cone empty points; rigs saved before 0.20
+    have it along the nozzle's -Z.  Reading the disc keeps both spraying
+    where the water really goes.
+    """
     from mathutils import Vector
-    return (sw.world_matrix(nozzle).to_3x3()
-            @ Vector((0.0, 0.0, -1.0))).normalized()
+    emitter = _nozzle_emitter(nozzle)
+    if emitter is not None:
+        basis = sw.world_matrix(emitter).to_3x3()
+    else:
+        basis = sw.world_matrix(nozzle).to_3x3() @ NOZZLE_TO_EMITTER
+    return (basis @ Vector((0.0, 0.0, -1.0))).normalized()
 
 
 def fit_domain(context, entry):
@@ -345,15 +369,14 @@ class AQS_OT_hose_create(bpy.types.Operator):
         naming.tag(nozzle, C.MODE_HOSE, uid)
         naming.link_object(col, nozzle)
         nozzle.location = cursor + type(cursor)((0.0, 0.0, 1.5))
-        # Unrotated: the aim is the nozzle's local -Z, i.e. straight down.
-        # (A 180-degree X rotation here turned the aim UP while the domain
-        # was fitted downward.)
-        nozzle.rotation_euler = (0.0, 0.0, 0.0)
+        # The jet fires where the Cone empty points (its local +Y), so
+        # tipping +Y down by -90 degrees about X aims it straight down.
+        nozzle.rotation_euler = (-math.pi / 2.0, 0.0, 0.0)
 
         # Single -Z-facing disc: a double-capped cylinder emits along BOTH
         # cap normals, spraying half the inflow backwards at the nozzle.
-        # Local -Z is the aim (see _aim_direction); emitter and nozzle
-        # share that axis.
+        # The disc's local -Z is the aim (see _aim_direction); it is
+        # tilted inside the nozzle so that axis is the cone's +Y.
         emesh = bpy.data.meshes.new("AQS_Hose_Emitter")
         bm = bmesh.new()
         bmesh.ops.create_circle(bm, cap_ends=True, segments=12, radius=0.03)
@@ -363,6 +386,7 @@ class AQS_OT_hose_create(bpy.types.Operator):
         emitter = naming.new_mesh_object(col, "AQS_Hose_Emitter", emesh,
                                          C.MODE_HOSE, uid)
         emitter.parent = nozzle
+        emitter.rotation_euler = NOZZLE_TO_EMITTER.to_euler()  # -Z -> cone
         emitter.display_type = "WIRE"
         # The disc itself never renders, but its particles must: hiding the
         # emitter from renders would hide the jet and mist too.

@@ -232,9 +232,10 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     ww_bubbles_size: FloatProperty(name="Size", default=0.009, min=0.0001, soft_max=0.1,
         subtype='DISTANCE', update=_whitewater_size_update, description="Bubble render radius in metres")
     wave_height: FloatProperty(name="Wave Height", default=0.45, min=0.01, max=2.0,
-        subtype='DISTANCE', update=_tank_update, description="Paddle stroke scale; final wave height depends on depth and bake resolution")
+        subtype='DISTANCE', update=_tank_update, description="Target wave height. The wave maker's push is derived from it, the period and the depth; "
+                    "heights that would break are capped (raise Period for taller waves)")
     wave_period: FloatProperty(name="Wave Period", default=2.4, min=0.5, max=12.0,
-        update=_period_update, description="Seconds per paddle cycle")
+        update=_period_update, description="Seconds per wave")
     tank_size: FloatVectorProperty(name="Tank Size", size=3, default=(20, 8, 4),
         min=2.0, max=100.0, subtype='XYZ', update=_tank_update)
     # Still Water restore records (source visibility policy §7.1.2/7.1.3)
