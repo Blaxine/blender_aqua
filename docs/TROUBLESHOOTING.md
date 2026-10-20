@@ -111,15 +111,34 @@
   being rendered, then render again. The four AOVs are Value passes. If a Color
   AOV already uses one of their names, rename it first. Pick materials with a
   Cryptomatte node for material mattes.
-- **Ocean waves are too coarse or die out:** a wave lower than about one
-  simulation cell does not travel — the liquid surface holds it as flat steps.
-  At 20 m tank length resolution 160 gives 12.5 cm cells and Draft halves that
-  resolution, so small waves need Draft off and a higher resolution (Calm uses
-  200), or a smaller tank. Bake enough frames: waves need about 10 s to reach
-  the middle of a 20 m tank.
-- **Ocean waves do not reach the far end / the water only sloshes at the wall:**
-  tanks made before 0.20 still use the old paddle, which barely makes travelling
-  waves. Click **Upgrade Wave Maker** in the tank's panel, then Bake Again.
+- **Ocean waves are too coarse or die out part-way down the tank:** a wave
+  lower than about one simulation cell does not travel — Blender's liquid
+  solver puts the water surface on whole cells, so it stops where it shrinks
+  below one. At 20 m tank length resolution 160 gives 12.5 cm cells and Draft
+  halves that resolution, so small waves need Draft off and a higher
+  resolution (Calm uses 400 in a narrower, shallower tank: 5 cm cells), or a
+  smaller tank. No other liquid setting (APIC, FLIP ratio, particle count or
+  band) changes this. The tank's panel warns in red when the resolution, or
+  Draft's halved one, is too low ("Waves this small need resolution 160 or
+  more (High) to cross the tank") — at Medium (96) Rolling Waves stall
+  part-way. The rule: cells no bigger than the wave height ÷ 2.4 and no
+  bigger than 12.5 cm. Bake still runs at a lower resolution, for layout.
+- **Ocean waves do not reach the far end:** bake long enough. Wave fronts
+  creep down the tank much slower than real waves (their low leading edge is
+  under a cell), so they reach the far end only 20–25 s in; new tanks bake 30 s
+  (720 frames at 24 fps) and extend the timeline to match. Tanks made before
+  0.20 still use the old paddle, which barely makes travelling waves: click
+  **Upgrade Wave Maker** in the tank's panel, then
+  Bake Again.
+- **Some spots in the far half stay flat for a while:** waves bounce off the
+  far wall and the returning waves cancel the incoming ones at drifting
+  points (a partial standing wave). Averaged over a few wave periods the far
+  half keeps most of the mid-tank height.
+- **Storm whitewater crashed Blender or filled the disk on long bakes:**
+  before 0.20 spray and foam lived 4–10 s, so a whole tank of breaking waves
+  piled up over 10 million particles by frame 300 and Blender crashed loading
+  them. Every ocean bake now sets 1–3 s lifetimes and a lower spawn rate: Free
+  Bake and Bake Again.
 - **Ocean waves do not hit a rock:** place it inside the tank and add it to Water
   Obstacles. The wave maker is part of the tank and does not need adding there.
 - **Other force fields have no effect on the tank:** each tank only listens to

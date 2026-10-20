@@ -14,7 +14,10 @@
   change particle render size only after adoption. Wave Period edits change
   the wave maker's timing and strength (or an old tank's paddle timing and
   subframes) without rebuilding tank geometry or whitewater. Calm's 0.12 m
-  waves need resolution 200 (about 2× the bake time of 160) to travel.
+  waves need resolution 400 to travel; its tank is 20 × 4 × 2.5 m so the
+  30 s bake takes about 19–20 min (Rolling Waves 4–5 min, Storm Surf 8 min).
+  Ocean whitewater lives 1–3 s, which keeps Storm Surf's particle cache at
+  about 26–29 MB per frame instead of 365 MB and growing.
 - **Generation Budget** caps shared whitewater generation (re-bake required).
   Zero suspends all elements without losing their choices. Default 1 preserves
   previous settings. Amount remains a relative visual density: unequal amounts

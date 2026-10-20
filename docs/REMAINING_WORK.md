@@ -1,13 +1,15 @@
 # AquaSuite 0.20.0 — remaining work
 
-Updated: 2026-10-19. Scope: REQ-003 implementation and review against
+Updated: 2026-10-20. Scope: REQ-003 implementation and review against
 `c8939f5`, through `f48d83c`, plus the 0.19.1 fix pass on top of `54e172d`
 and the 0.20.0 wave maker on top of `193378b`.
 This is a preview, not a release acceptance record.
 
 **0.20.0** replaces Ocean (Simulated)'s paddle with a force-field wave maker
 (S020, S023 below). It was validated on **Blender 4.5.4 and 5.2.2 LTS** only:
-full `--bake` suite 489 passed, 0 failed, 1 skipped across both.
+full `--bake` suite 551 passed, 0 failed, 1 skipped across both (after the
+far-tank follow-up: Calm at resolution 400, 30 s cache, resolution warning,
+Storm whitewater fix).
 
 0.19.1 was validated on **Blender 4.5.x and 5.2.2 LTS** — Blender 5.1 (the
 release-test version) and 4.1 were not installed on the machine that ran it.
@@ -125,13 +127,14 @@ script; they have not been looked at in the UI.
      0.12 m waves at 12.5 cm cells (resolution 160) died within 3 m of the
      zone (≤ 0.03 m from x = −3) at the theory strength, while doubling it
      jumped to 0.25 m. At 10 cm cells (resolution 200) the theory strength
-     gives 0.14 m mid-tank, so **Calm's preset resolution is now 200** (about
-     2× the bake time). At Draft resolution 80, Rolling's waves reach only
+     gives 0.14 m mid-tank, so Calm's preset resolution became 200 (superseded:
+     the waves still stalled further on, so Calm is now 400 in a smaller tank,
+     point 8). At Draft resolution 80, Rolling's waves reach only
      0.09 m near the zone and do not travel: Draft is for layout only.
   4. *Waves take ~10 s to fill the middle of the tank.* At resolution 160,
      Rolling's mid-tank height grows 0.06 → 0.24 → 0.39 m over the periods
-     ending at frames 114, 230 and 288 (24 fps). New tanks still default to a
-     144-frame cache, which shows the waves only about half-way down the tank.
+     ending at frames 114, 230 and 288 (24 fps). The 144-frame default cache
+     showed them only about half-way down the tank (now 30 s, point 10).
   5. *Isolation.* The Wind is limited to the tank (tube falloff over the tank
      cross-section, positive side of the left wall only), and the domain's
      effector collection is the tank's own collection, so scene force fields
@@ -150,6 +153,73 @@ script; they have not been looked at in the UI.
      file path first (data, mesh, particles, guiding; frame digits from the
      end frame) and refuses at 260+ with AQS-E021 before Mantaflow runs
      (`tests/test_cache_path.py`, fast; Windows only for the refusal).
+
+  **0.20.0 far-tank follow-up (2026-10-20): waves now cross the tank.** Report:
+  after a 1500-frame bake the waves did not travel all the way across. The
+  S023 gauges only covered x = −5…−3 m, so the far half had never been
+  measured. Probes: Blender 4.5, 720 frames (30 s) at preset resolution,
+  crest-to-trough per wave period in 0.5 m bins along the centreline.
+  8. *Calm stalled — waves under a cell high do not travel.* At resolution 200
+     (10 cm cells) Calm was 0.14 m at x = −4, 0.06 m at +2 and 0.002 m from
+     +3 on, at every time. The solver's own velocity at the wave frequency
+     (read from the data cache) fell to ~1% of its near-maker value past +2,
+     so the water really stops; the mesh was not hiding waves. Cause, from
+     Blender's liquid step script: `solvePressure` gets the cell flags but no
+     level set (no ghost-fluid surface), so the free surface sits on whole
+     cells and a displacement under about one cell gets no restoring force.
+     It is a threshold, not damping: at resolution 80, Rolling forcing ×1, ×2,
+     ×4 gave 0.034, 0.28 and 0.86 m mid-tank (8× for 2×). APIC, FLIP ratio
+     1.0, particle band 30, 3 particles per cell and fractions did not help
+     (fractions lost 1.8% of the water). Coarse cells also damp waves roughly
+     as cell size squared (Rolling: 0.25/m at 25 cm, 0.03–0.07/m at 12.5 cm).
+     **Fix: Calm is resolution 400 in a 20 × 4 × 2.5 m tank** (5 cm cells,
+     2.5× Rolling's cell count): its waves reach the far wall (decay
+     0.025/m). Old Calm tanks keep their own 20 × 8 × 4 m tank and resolution
+     200 (fast test: reopen unchanged, not marked modified; Bake keeps both);
+     their panel now says 400 would carry the waves.
+  9. *Resolution warning.* The panel warns in red when the effective
+     resolution (after Draft) is below `ceil(longest side / min(H / 2.4,
+     0.125 m))` — Calm 400, Rolling and Storm 160 — and names the button that
+     reaches it (High) or Custom; with Draft on at a sufficient resolution it
+     says to turn Draft off. Bake shows the same text as a warning but still
+     runs: a coarse or Draft bake is a valid layout preview, and blocking it
+     would make Draft useless for ocean tanks. The 2.4-cells figure is Calm's
+     measured crossing (stalled at 1.4); the 12.5 cm cap is the largest cell
+     measured to carry waves across (Rolling stalled at Medium's 21 cm, 2.2
+     cells, ~0.2/m decay). Fast tests cover Medium, Draft, Calm at Ultra and
+     the panel text.
+  10. *Rolling did reach the far wall — the far half is a standing wave.* At
+     resolution 160, H at x = +4…+6 averaged over the last three periods was
+     0.22–0.28 m against 0.36 m mid-tank, and 0.37 m at the far wall. In any
+     one period the far wall's reflection (fitted R ≈ 1 up to x = +6; the fit
+     is noisy) leaves near-flat nodes about λ/2 = 4.2 m apart (x = +4: 0.06 m,
+     +8: 0.12 m) that drift from one period to the next. Wave fronts creep
+     at ~0.7 m/s (linear group velocity 2.2 m/s) because their low leading
+     edge is under a cell: they reach x = +4 only after 20–24 s, so the old
+     144-frame (6 s) default never showed them. **New tanks bake 30 s**
+     (`CACHE_SECONDS`, 720 frames at 24 fps) and extend the timeline if it is
+     shorter (fast test).
+  11. *Absorbers tried and rejected (volume).* A Drag force field does nothing
+     to the liquid (Blender passes it no velocity). A 1:2.5 beach rising
+     above the water cut reflection to R ≈ 0.23 but grew the liquid +0.87% to
+     +0.94% (Rolling) and +10.9% (Storm, 720 frames); a submerged shelf (top
+     0.6 m under water) gave +0.24% (Rolling) but +2.49% (Storm). The tank
+     stays closed with a flat far wall. Consequence: Storm's mid-tank height
+     matches its target until the reflection returns (0.90–0.94 m at
+     11–17 s), then the standing wave stacks to 1.6–1.7 m (≈1.9×) by 30 s.
+     The bake test therefore checks the target at 12 s and only bounds the
+     late build-up.
+  12. *Storm Surf crashed long bakes — whitewater never expired.* Mantaflow's
+     secondary-particle lifetimes are solver time units (one frame =
+     0.1 × 25/fps × time scale, so 1 s = 2.5 units at any fps); Blender's
+     defaults 10–25 are 4–10 s. A whole tank of breaking waves passed ~10 M
+     particles by frame 300 (particle cache 365 MB/frame and climbing) and
+     Blender aborted loading them ("Calloc array aborted due to integer
+     overflow … in particles", frame 303). Ocean tanks now use 1–3 s
+     (2.5–7.5 units) and a quarter of the wave-crest/trapped-air sampling
+     (`core/whitewater.py`, applied at every bake): a 720-frame Storm baked
+     in 499 s with no crash, the particle cache levels off at 26–29 MB/frame,
+     and the liquid volume changed +0.15% (peak +0.32%).
 - [ ] **S021 — Apply review-supported preset tuning.** Update preset values only
   once the visual review establishes the needed changes. Recheck all affected
   presets after tuning.
@@ -169,23 +239,42 @@ script; they have not been looked at in the UI.
   next to the paddle, so it rewards slosh at the paddle as much as travelling
   waves (S020 point 3). Acceptance waits for a mid-tank wave-height metric
   alongside S020's new wave generator, and for S019.
-  **0.20.0: metric replaced; passes on Blender 4.5; acceptance still waits for
-  S019.** The test now bakes each preset for 288 frames (12 s) and measures
-  wave height as crest-to-trough over the last full wave period at five fixed
-  gauges x = −5, −4.5, −4, −3.5, −3 m (clear of the 4 m forcing zone), plus
-  the same at the wall (x = −9.5) and the liquid volume at the first and last
-  frame. Checks: mid-tank within 35% of the (capped) target, wall at most
-  2.5 × mid-tank, volume within 1%, and Calm < Rolling < Storm. Measured:
+  **0.20.0: metric replaced; passes on Blender 4.5 and 5.2; acceptance still
+  waits for S019.** The test bakes each preset for 720 frames (30 s, the new
+  default cache length) and measures wave height as crest-to-trough at five
+  fixed gauges x = −5, −4.5, −4, −3.5, −3 m (clear of the 4 m forcing zone),
+  at the wall (x = −9.5) and at five far-tank gauges x = +4 … +6 m, plus the
+  liquid volume at the first and last frame. Two windows:
+  - **calibration**, the last full wave period ending at 12 s (frame 288),
+    before the reflection from the far wall returns: mid-tank and wall;
+  - **late**, the mean over the last 3 wave periods before 30 s: far tank,
+    mid-tank and wall.
 
-  | Preset | Target | Mid-tank (gauges) | Wall | Volume |
-  |---|---|---|---|---|
-  | Calm (res 200) | 0.12 m | 0.141 m (0.145, 0.141, 0.144, 0.140, 0.137) | 0.179 m | 329.73 → 329.94 m³ (+0.06%) |
-  | Rolling Waves (res 160) | 0.45 m | 0.400 m (0.372, 0.405, 0.400, 0.422, 0.398) | 0.521 m | 322.30 → 322.61 m³ (+0.10%) |
-  | Storm Surf (res 160) | 0.90 m | 0.937 m (0.891, 0.908, 0.913, 0.951, 1.020) | 1.093 m | 322.30 → 322.72 m³ (+0.13%) |
+  Checks: mid-tank (calibration) within 35% of the (capped) target; far tank
+  (late) at least 0.5 × mid-tank; late mid-tank at most 2.5 × target; wall at
+  most 2.5 × mid-tank; volume within 1%; Calm < Rolling < Storm. The runner
+  now prints each preset's measurements as `INFO` lines. Measured on the full
+  suite (identical on Blender 4.5.4 and 5.2.2):
+
+  | Preset | Target | Mid-tank, 12 s (gauges) | Far tank, late | Mid-tank, late | Wall / late | Volume | Bake 4.5 / 5.2 |
+  |---|---|---|---|---|---|---|---|
+  | Calm (res 400, 20×4×2.5 m) | 0.12 m | 0.116 m (0.129, 0.106, 0.102, 0.130, 0.115) | 0.105 m | 0.078 m | 0.119 / 0.084 m | 104.26 → 104.82 m³ (+0.54%) | 1219 / 1112 s |
+  | Rolling Waves (res 160) | 0.45 m | 0.400 m (0.372, 0.405, 0.400, 0.422, 0.398) | 0.280 m | 0.356 m | 0.521 / 0.468 m | 322.30 → 323.66 m³ (+0.42%) | 291 / 249 s |
+  | Storm Surf (res 160) | 0.90 m | 0.937 m (0.891, 0.908, 0.913, 0.951, 1.020) | 1.801 m | 1.683 m | 1.093 / 1.561 m | 322.30 → 322.78 m³ (+0.15%) | 504 / 466 s |
+
+  The far wall reflects almost everything, so after about 19 s the tank holds
+  a partial standing wave whose nodes drift. Rolling's far half keeps 0.6–0.7 ×
+  the mid-tank height on average; Storm's crests stack to about 1.9 × target
+  (antinodes 2.0–2.2 m, nodes 0.3–0.4 m at x ≈ −7, −2, +2.5, +7.5). Calm's late
+  heights fall below target because its waves are still close to the one-cell
+  limit (S020 point 8). Absorbing the reflection was tried and rejected (S020
+  point 11). Before the follow-up, Calm (res 200, 20×8×4 m) gave 0.141 m at
+  12 s but stalled: about 0.03 m beyond x = 0.
 
   For comparison, the 0.19.1 paddle at Rolling Waves gave 0.38 m at the wall
-  and 0.007–0.017 m from x = −5 onward. The 35% band and 2.5× wall limit are
-  provisional, chosen before any render was seen; assess them in S019.
+  and 0.007–0.017 m from x = −5 onward. The 35% band, 0.5 × far share and 2.5×
+  limits are provisional, chosen before any render was seen; assess them in
+  S019.
 - [x] Run the full `tests/run_tests.py --bake` suite after fixes and tuning.
   **Blender 4.5, 0.19.1: 219 passed, 0 failed, 1 skipped in 225 s** (the skip is
   `test_efficiency.py`'s restricted-registration check: Blender 4.5 has no
@@ -197,9 +286,15 @@ script; they have not been looked at in the UI.
   files). Not run on 5.1 or 4.1 — repeat there before release.
   **0.20.0: Blender 4.5.4 244 passed, 0 failed, 1 skipped (same skip);
   Blender 5.2.2 245 passed, 0 failed, 0 skipped; 2069 s for both.** The ocean
-  bake test now bakes 3 × 288 frames (Calm at resolution 200), so it is the
-  slowest file. The runner prints pass/fail only; the mid-tank heights under
-  S023 are from a direct 4.5 run of the same test file. Not run on 5.1 or 4.1.
+  bake test then baked 3 × 288 frames (Calm at resolution 200).
+  **0.20.0 after the far-tank follow-up (2026-10-20): 551 passed, 0 failed,
+  1 skipped across both in 4704 s** — Blender 4.5.4 275 passed, 0 failed,
+  1 skipped (same `test_efficiency.py` skip); Blender 5.2.2 276 passed,
+  0 failed, 0 skipped. The ocean bake test now bakes 3 × 720 frames with Calm
+  at resolution 400 (about 30 min per Blender of the 78 min total), and the
+  runner's bake timeout is 3 h per file. Its heights and volumes under S023
+  come from this run's `INFO` lines. Fast suite afterwards: see the zip entry
+  below. Not run on 5.1 or 4.1.
 
 ## Manual acceptance
 
@@ -261,14 +356,28 @@ script; they have not been looked at in the UI.
   paddle stroke (0.150 m), phase, rest position and water block; a Wave
   Height edit still runs the paddle path; Upgrade Wave Maker then swaps in
   the Wind wave maker (strength 0.108). Not baked under 0.20.0; repeat in 5.1.
+  **0.20.0 rebuilt after the far-tank follow-up (2026-10-20)** with Blender
+  5.2.2's builder: `extension validate` passes; 41 files, each byte-identical
+  to the source; manifest version 0.20.0, website
+  `https://github.com/Blaxine/blender_aqua`. Fresh install into an isolated
+  5.2.2 profile (`extension install-file`) loads `bl_ext.user_default.aquasuite`
+  v0.20.0 and creates all three ocean presets with a Wind wave maker and a
+  1–720 cache: Calm 20 × 4 × 2.5 m at 400, Rolling and Storm 20 × 8 × 4 m at
+  160, none warned; at 96 the warning names "160 or more (High)". Storm (and
+  Rolling once Foam is on) gets 2.5–7.5-unit (1–3 s) whitewater lifetimes;
+  the add-on disables cleanly. Fast suite on the final tree: 483 passed,
+  0 failed, 9 skipped across 4.5.4 and 5.2.2 in 67 s (skips: the four bake-only
+  files on each, plus 4.5's restricted-registration check).
 - [ ] Finish release notes and the remaining release checklist before publishing.
   Publishing is a later action; this document does not authorize an upload.
 
 ## Evidence already available
 
-- 0.20.0 (Blender 4.5.4 and 5.2.2): full `--bake` suite 489 passed, 0 failed,
-  1 skipped; ocean mid-tank heights, wall heights and volumes under S023;
-  force-scaling, resolution and legacy-tank findings under S020.
+- 0.20.0 (Blender 4.5.4 and 5.2.2): full `--bake` suite 551 passed, 0 failed,
+  1 skipped in 4704 s (489 passed before the far-tank follow-up); ocean
+  mid-tank, far-tank and wall heights, volumes and bake times under S023;
+  force-scaling, resolution, legacy-tank and Storm whitewater findings under
+  S020.
 
 - 0.19.1 (Blender 4.5 only): fast suite 199 passed, 0 failed, 5 skipped; full
   `--bake` suite 219 passed, 0 failed, 1 skipped; P2 regression tests fail

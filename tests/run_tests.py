@@ -44,7 +44,8 @@ def load_blenders():
     return blenders
 
 
-def run_file(blender, test_file, bake, workdir):
+def run_file(blender, test_file, bake, workdir, info=None):
+    """Check results; INFO lines (measurements a test reports) go to `info`."""
     cmd = [blender["path"], "-b", "--factory-startup", "--python", test_file,
            "--", "--repo", REPO, "--workdir", workdir]
     if bake:
@@ -54,7 +55,8 @@ def run_file(blender, test_file, bake, workdir):
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", env=env,
-                              timeout=1800 if bake else 300)
+                              # The ocean bake test bakes 3 x 720 frames (~45 min).
+                              timeout=10800 if bake else 300)
         out = proc.stdout + proc.stderr
         returncode = proc.returncode
     except subprocess.TimeoutExpired as exc:
@@ -67,6 +69,9 @@ def run_file(blender, test_file, bake, workdir):
         parts = [p.strip() for p in line[len(TAG):].split("|")]
         if parts[0] == "DONE":
             done = True
+        elif parts[0] == "INFO":
+            if info is not None:
+                info.append(" | ".join(parts[1:]))
         elif parts[0] in ("PASS", "FAIL", "SKIP"):
             results.append((parts[0], parts[1] if len(parts) > 1 else "?",
                             parts[2] if len(parts) > 2 else ""))
@@ -109,7 +114,8 @@ def main():
         for test_file in files:
             workdir = tempfile.mkdtemp(prefix="aqs_test_")
             try:
-                results = run_file(blender, test_file, args.bake, workdir)
+                info = []
+                results = run_file(blender, test_file, args.bake, workdir, info)
             finally:
                 shutil.rmtree(workdir, ignore_errors=True)
             name = os.path.basename(test_file)
@@ -126,6 +132,8 @@ def main():
             for status, check, detail in results:
                 if status == "FAIL":
                     print(f"         FAIL {check}: {detail}")
+            for line in info:  # measurements a test chose to report
+                print(f"         INFO {line}")
 
     print(f"\n{totals['PASS']} passed, {totals['FAIL']} failed, "
           f"{totals['SKIP']} skipped across {len(blenders)} Blender(s) "

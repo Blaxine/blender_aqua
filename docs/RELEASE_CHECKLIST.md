@@ -38,7 +38,7 @@ below still need a 5.1 run and a look at the renders.
 - [ ] `blender --command extension build --source-dir <repo> --output-dir <dist>` produces `aquasuite-<version>.zip`
 - [ ] Fresh Blender profile: Preferences → Get Extensions → ▾ → Install from Disk → the zip
 - [ ] AquaSuite is enabled; the **Water** tab appears in the 3D Viewport N-panel
-- [ ] Preferences → Add-ons → AquaSuite: the website link opens github.com/Blaxine/aquasuite
+- [ ] Preferences → Add-ons → AquaSuite: the website link opens github.com/Blaxine/blender_aqua
 
 ## 3. Every mode (Blender 5.1)
 

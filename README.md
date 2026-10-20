@@ -153,13 +153,19 @@ Wave Height is the target height mid-tank — the push is derived from it, the
 period and the water depth with linear wave theory — and Wave Period is in
 seconds. Waves too steep to exist (they would break where they are made) are
 capped, and the panel says so: raise Period for taller waves. Tank Size
-defaults to 20 × 8 × 4 metres. The push fades in over the first wave period;
-waves need about 10 seconds to reach the middle of a 20 m tank, so bake a long
-enough frame range. Place a rock inside the tank and add it to Water Obstacles,
-save, then bake. Waves smaller than about one simulation cell do not travel, so
-Draft (half resolution) is for layout only, and Calm uses a finer resolution
-than the other presets. This mode does not use the procedural ocean's buoys or
-wake system.
+defaults to 20 × 8 × 4 metres (Calm: 20 × 4 × 2.5). The push fades in over the
+first wave period; wave fronts take 20–25 seconds to reach the far end of a
+20 m tank, so new tanks bake 30 seconds (720 frames at 24 fps) and extend the
+timeline to match. The far wall reflects the waves, so late in a long bake the
+tank holds a partly standing wave: some spots rise and fall less for a while
+and others more (Storm Surf reaches about 1.9× its set height mid-tank by
+30 s). Place a rock inside the tank and add it to Water Obstacles, save, then
+bake. Waves smaller than about one simulation cell do not travel — Blender's
+liquid solver puts the surface on whole cells — so the panel warns when the
+resolution (or Draft's halved one) is too low for the waves to cross the tank
+and names the resolution that works: High (160) for Rolling Waves and Storm
+Surf, 400 for Calm. Bake still runs, for layout previews. This mode does not
+use the procedural ocean's buoys or wake system.
 
 Tanks made before 0.20 keep their original paddle and bake exactly as before.
 Their panel offers **Upgrade Wave Maker**, which swaps the paddle for the new
@@ -233,7 +239,12 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
 - 0.20.0: Ocean (Simulated) makes waves with a force-field wave maker instead
   of a paddle, so waves now travel down the tank and reach about their target
   height mid-tank (Calm, Rolling Waves and Storm Surf were measured). Old tanks
-  keep their paddle until you choose Upgrade Wave Maker. The hose's cone now
+  keep their paddle until you choose Upgrade Wave Maker. Waves now cross the
+  whole tank: Calm bakes at resolution 400 in a 20 × 4 × 2.5 m tank, new tanks
+  bake 30 s, and the panel warns when the resolution is too low for the waves
+  to travel. Storm Surf no longer crashes Blender on long bakes (its
+  whitewater lives 1–3 s instead of 4–10 s). Liquid bakes refuse to start when
+  a cache file path would pass Windows' 260-character limit. The hose's cone now
   points where the water goes, so aiming the cone aims the jet (hoses saved
   earlier keep spraying where they did).
 - 0.19.1 fixes: deleting Water Lighting no longer strips the sky from
@@ -269,7 +280,7 @@ Planned for future free 1.x updates, in no fixed order and without dates:
 ## Support
 
 Found a bug or have a question? Open an issue at
-**https://github.com/Blaxine/aquasuite/issues** — paste the text from
+**https://github.com/Blaxine/blender_aqua/issues** — paste the text from
 **Copy Report** if AquaSuite showed an error. Support is best-effort.
 
 Field names in the Blender Python API occasionally shift between

@@ -275,6 +275,11 @@ def _draw_whitewater(box, entry):
         warn.label(text=entry.ww_warning, icon='ERROR')
 
 
+def _wrap(text, width):
+    import textwrap
+    return textwrap.wrap(text, width) or [text]
+
+
 def _draw_wave_limit(box, entry):
     """Say so when the requested waves would break and were capped — and
     what to change to get taller ones.  Tanks from before 0.20 still have
@@ -286,6 +291,13 @@ def _draw_wave_limit(box, entry):
         row.alert = True
         row.label(text=f"Waves this steep break — capped at {height:.2f} m. "
                        "Raise Period for taller waves", icon='INFO')
+    warning = simulated_ocean.resolution_warning(
+        entry, [(label, res) for label, res, _d in RES_PRESETS_UI])
+    if warning:
+        col = box.column(align=True)
+        col.alert = True
+        for i, line in enumerate(_wrap(warning, 60)):
+            col.label(text=line, icon='ERROR' if i == 0 else 'BLANK1')
     if simulated_ocean.is_legacy(entry):
         box.label(text="This tank uses the old paddle; its waves barely travel", icon='INFO')
         box.operator('aquasuite.simulated_ocean_upgrade', icon='FILE_REFRESH').uuid = entry.uuid

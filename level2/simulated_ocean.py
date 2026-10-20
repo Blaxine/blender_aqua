@@ -32,6 +32,46 @@ WIND_GAIN = 0.2
 # holds once waves span a few cells, so no fudge factor is applied.
 WAVE_EFFICIENCY = 1.0
 ZONE_SHARE = 0.2        # the forcing zone may use at most this share of the tank
+# Wave fronts creep at ~0.7 m/s (their low leading edge is under a cell), so
+# waves first reach the far end 20-24 s into the bake; new tanks cache 30 s.
+CACHE_SECONDS = 30
+# Blender's liquid solver puts the free surface on whole cells, so a wave
+# lower than about a cell gets no restoring force and stops; coarse cells
+# also damp waves roughly as cell size squared.  Measured at 720 frames:
+# Calm 0.12 m crossed the tank at 5 cm cells (2.4 cells high) but stalled
+# 12 m out at 10 cm (1.4 cells); Rolling 0.45 m crossed at 12.5 cm but
+# stalled at Medium's 21 cm (2.2 cells, ~0.2/m decay).
+CELLS_PER_WAVE = 2.4
+MAX_CELL = 0.125
+
+
+def effective_resolution(entry):
+    """The resolution the bake uses: Draft halves it."""
+    return max(16, entry.base_resolution // 2) if entry.draft else entry.base_resolution
+
+
+def min_resolution(entry):
+    """The lowest resolution whose cells let this tank's waves cross it."""
+    height, _amplitude = wave_plan(entry)
+    cell = min(height / CELLS_PER_WAVE, MAX_CELL)
+    return math.ceil(round(max(entry.tank_size) / max(cell, 1e-6), 3))
+
+
+def resolution_warning(entry, buttons=()):
+    """'' when the waves can cross the tank, else what to change.  `buttons`
+    are the panel's (label, resolution) presets, to name the one that works."""
+    if is_legacy(entry):
+        return ''
+    need = min_resolution(entry)
+    if effective_resolution(entry) >= need:
+        return ''
+    if entry.draft and entry.base_resolution >= need:
+        return (f'Draft halves the resolution to {effective_resolution(entry)}: waves this '
+                f'small die out part-way. Turn Draft off to bake waves that cross the tank')
+    button = next((label for label, res in sorted(buttons, key=lambda b: b[1]) if res >= need),
+                  'Custom')
+    return (f'Waves this small need resolution {need} or more ({button}) to cross the '
+            f'tank; at {effective_resolution(entry)} they die out part-way')
 
 
 def wave_number(period, depth):
@@ -194,6 +234,7 @@ def _apply_paddle(entry, scene, ds, source, paddle):
 
 # --- force-field wave maker ------------------------------------------------
 
+
 def _apply_wavemaker(entry, scene, ds, source, field_obj):
     """Fill the tank with still water and drive the Wind field: full depth
     and width, `zone` metres from the left wall, strength a sine at the wave
@@ -326,8 +367,12 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
         mod = dom.modifiers.new('AQS Fluid', 'FLUID')
         mod.fluid_type = 'DOMAIN'
         ds = sw.setup_domain_settings(mod, uid, 96)
+        fps = scene.render.fps / scene.render.fps_base
         ds.cache_frame_start = scene.frame_start
-        ds.cache_frame_end = min(scene.frame_end, scene.frame_start + 143)
+        ds.cache_frame_end = scene.frame_start + round(CACHE_SECONDS * fps) - 1
+        extended = scene.frame_end < ds.cache_frame_end
+        if extended:  # the bake is only played back inside the scene range
+            scene.frame_end = ds.cache_frame_end
         mats.assign(dom, mats.water_surface(C.MODE_SIMOCEAN, uid, name='AQS_Tank_Liquid'))
         source = _box(col, uid, 'water')
         flow = source.modifiers.new('AQS Water Fill', 'FLUID')
@@ -342,14 +387,17 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
         presets.apply(context, entry, self.preset)
         sw.add_effectors(scene, dom, uid)
         context.view_layer.objects.active = dom
-        self.report({'INFO'}, 'Wave tank created — save and bake; Draft suspends whitewater')
+        self.report({'INFO'}, f'Wave tank created — save and bake; the bake covers {CACHE_SECONDS} s '
+                    f'({ds.cache_frame_end - ds.cache_frame_start + 1} frames)'
+                    + (', so the timeline was extended' if extended else '')
+                    + '; Draft suspends whitewater')
         return {'FINISHED'}
 
 
 class AQS_OT_simulated_ocean_upgrade(bpy.types.Operator):
     bl_idname = 'aquasuite.simulated_ocean_upgrade'
     bl_label = 'Upgrade Wave Maker'
-    bl_description = ('Replace this tank\'s paddle with the force-field wave maker, '
+    bl_description = ("Replace this tank's paddle with the force-field wave maker, "
                       'whose waves travel down the tank. Bake Again afterwards')
     bl_options = {'REGISTER', 'UNDO'}
     uuid: bpy.props.StringProperty()

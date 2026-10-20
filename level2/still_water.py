@@ -422,6 +422,11 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
             # The wave maker's strength depends on fps and its fade-in on
             # the cache start, which may have changed since it was set.
             simulated_ocean.apply_period(entry)
+            # Warn, don't block: a coarse or Draft bake is still a valid
+            # layout preview, its waves just die out part-way down the tank.
+            warning = simulated_ocean.resolution_warning(entry)
+            if warning:
+                self.report({'WARNING'}, warning)
         # Living obstacle rule: (re)register Collision-enabled meshes as
         # effectors NOW, so objects added after creation block the water.
         try:
