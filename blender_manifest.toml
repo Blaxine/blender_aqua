@@ -10,7 +10,7 @@ tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
 maintainer = "AquaSuite"
 type = "add-on"
 
-website = "https://github.com/Blaxine/aquasuite"
+website = "https://github.com/Blaxine/blender_aqua"
 
 tags = ["Physics", "Object", "3D View"]
 

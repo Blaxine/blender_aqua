@@ -42,7 +42,7 @@ SRC_PROP = "aqs_source_of"                # marks a USER object as a Still-Water
 ROOT_COLLECTION = "AQS_Assemblies"
 
 # Public issue tracker: bug reports, roadmap, support.
-SUPPORT_URL = "https://github.com/Blaxine/aquasuite/issues"
+SUPPORT_URL = "https://github.com/Blaxine/blender_aqua/issues"
 
 MODE_OCEAN = "OCEAN"
 MODE_RAIN = "RAIN"

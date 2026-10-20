@@ -1,21 +1,40 @@
 # Preset manual review (current preview: 0.20.0)
 
-## 0.20.0 changes to review — 2026-10-19
+## 0.20.0 changes to review — 2026-10-20
 
 - **New wave maker for all three ocean presets.** New tanks push the water
   with a Wind force field over the 4 m next to the left wall instead of
   moving a paddle, so waves now travel down the tank. Strength comes from
-  linear theory (no per-preset tuning). Measured mid-tank (x = −5…−3 m) after
-  12 s on Blender 4.5: Calm 0.14 m (target 0.12), Rolling Waves 0.40 m (0.45),
-  Storm Surf 0.94 m (0.90); see S020/S023 in
-  [REMAINING_WORK.md](REMAINING_WORK.md). Wave Height and Wave Period values
-  are unchanged.
-- **Calm resolution 160 → 200.** Its 0.12 m waves are one 12.5 cm cell high
-  and do not travel at 160. Bakes take about twice as long.
+  linear theory (no per-preset tuning). Measured on Blender 4.5 and 5.2
+  (identical), mid-tank (x = −5…−3 m) at 12 s and far tank (x = +4…+6 m)
+  averaged over the last 3 periods before 30 s: Calm 0.116 / 0.105 m
+  (target 0.12), Rolling Waves 0.40 / 0.28 m (0.45), Storm Surf 0.94 /
+  1.80 m (0.90); see S020/S023 in [REMAINING_WORK.md](REMAINING_WORK.md).
+  Wave Height and Wave Period values are unchanged.
+- **Calm: resolution 160 → 400 and tank 20 × 8 × 4 → 20 × 4 × 2.5 m.** Blender
+  puts the water surface on whole cells, so a wave lower than about one cell
+  stalls; Calm's 0.12 m waves need 5 cm cells to cross the tank. The narrower,
+  shallower tank keeps the bake to about 19–20 min (4.5/5.2). Calm tanks made
+  earlier keep their saved size and resolution; the panel warns that they
+  need 400.
+- **Bakes are now 30 s (720 frames at 24 fps) by default**, and creating a
+  tank extends a shorter timeline. Wave fronts reach the far end only 20–25 s
+  in. Measured bake times (4.5/5.2): Calm 1219/1112 s, Rolling 291/249 s,
+  Storm 504/466 s.
+- **Resolution warning.** The tank's panel and Bake warn in red when the
+  resolution (or Draft's halved one) is too coarse for the wave height and
+  name the one that works, e.g. "Waves this small need resolution 160 or more
+  (High)". The bake still runs (a layout preview is legitimate).
+- **Ocean whitewater lives 1–3 s** (was 4–10 s) and spawns at a quarter of the
+  rate: Storm Surf crashed Blender at frame 303 with over 10 million particles.
+  Judge whether foam trails now look too short.
 - **To look at in the review:** the water within 4 m of the left wall moves
   up and down more than mid-tank (Rolling 0.52 m there vs 0.40 m) — decide
-  whether it is visible in the shipped camera framings. Waves need ~10 s to
-  reach mid-tank; the default 144-frame cache shows them only half-way.
+  whether it is visible in the shipped camera framings. After about 19 s the
+  far wall's reflection makes a partial standing wave: some spots in the far
+  half stay flat for a while, and Storm's crests grow to about 1.9 × the set
+  height. Decide whether a shorter shot range or a smaller Storm height reads
+  better.
 - S021 can now tune the ocean presets: the generator no longer blocks it.
 
 ## 0.19.1 changes to review — 2026-10-19
@@ -104,7 +123,7 @@ still required. 0.18.0 also raises Calm and Rolling Waves to resolution 160
 
 Record the preset, engine, resolution/Draft, frame range, and the visible result
 for anything that fails. Exact preset values and the 20 × 8 × 4 m tank default
-are initial choices awaiting this review.
+(Calm 20 × 4 × 2.5 m) are initial choices awaiting this review.
 
 ## Automated coverage (reconciled 2026-10-19)
 
@@ -119,7 +138,8 @@ recorded. The 0.19.1 runs were on Blender 4.5 only.
 | Idempotent Cryptomatte + AOV setup | `test_presets` | same |
 | Each preset bakes liquid (16 frames, capped resolution) | `test_preset_bakes --bake` | 4.5 (0.19.1); 5.1.2 (0.19.0) |
 | Baked Spray/Foam/Bubbles have particles | `test_whitewater --bake` | 4.5 (0.19.1) |
-| Ocean mid-tank wave height per preset, wall, volume, ordering (288 frames) | `test_simulated_ocean --bake` | 4.5 (0.20.0), see S023 |
+| Ocean mid-tank, far-tank and wall wave height per preset, volume, ordering (720 frames) | `test_simulated_ocean --bake` | 4.5 + 5.2.2 (0.20.0), see S023 |
+| Minimum-resolution warning (panel, Draft, old Calm tank) | `test_simulated_ocean` | 4.5 + 5.2.2 (0.20.0) |
 | Wave-maker theory, steepness cap, zone/water placement, fps scaling | `test_simulated_ocean` | 4.5 + 5.2.2 (0.20.0) |
 | Legacy paddle tank unchanged after reload; Upgrade Wave Maker | `test_simulated_ocean` | 4.5 + 5.2.2 (0.20.0) |
 | Shared/fake-user lighting world survives delete | `test_lighting` | 4.5 (0.19.1) |

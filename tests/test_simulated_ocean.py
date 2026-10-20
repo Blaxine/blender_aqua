@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Ocean (Simulated): tank build, wave-maker forcing per preset, legacy
-paddle tanks and their upgrade, obstacles, delete; with --bake, each preset
-makes waves of about its target height mid-tank, Calm < Rolling < Storm,
+"""Ocean (Simulated): tank build, wave-maker forcing per preset,
+default cache length, legacy paddle tanks and their upgrade, obstacles,
+delete; with --bake, each preset makes waves of about its target height
+mid-tank that still reach the far end, Calm < Rolling < Storm,
 without losing water or overdriving the wall."""
 
 import math
@@ -16,8 +17,18 @@ import bpy  # noqa: E402
 from aquasuite.core import presets  # noqa: E402
 from aquasuite.level2 import simulated_ocean as so, still_water as sw  # noqa: E402
 
-FRAMES = 288  # waves need ~10 s to build up mid-tank
+FRAMES = 720  # 30 s: wave fronts reach the far end after 20-24 s
 MID_X = (-5.0, -4.5, -4.0, -3.5, -3.0)  # mid-tank gauges, clear of the 4 m zone
+FAR_X = (4.0, 4.5, 5.0, 5.5, 6.0)       # far-tank gauges
+FAR_SHARE = 0.5  # far-tank waves must keep at least half the mid-tank height
+PERIODS = 3      # late heights are averaged over this many final wave periods:
+                 # the far-tank pattern drifts from one period to the next
+CAL_FRAME = 288  # 12 s: mid-tank waves are built up and the far-wall reflection
+                 # has not come back yet (Storm's returns at ~19 s), so this is
+                 # where the wave maker's calibration is checked
+LATE_LIMIT = 2.5  # the closed tank stacks reflections into a partial standing
+                  # wave (Storm: ~1.9x the set height mid-tank by 30 s); this
+                  # only catches runaway build-up
 WALL_X = -9.5
 
 
@@ -64,6 +75,22 @@ def test_build_and_presets():
         lib.check(f"{key}: only this tank's own fields push its water",
                   ds.effector_weights.collection == e.root_collection)
         bpy.ops.aquasuite.assembly_delete(uuid=u)
+    sc = lib.scene()
+    sc.frame_start, sc.frame_end = 1, 250
+    bpy.ops.aquasuite.simulated_ocean_create(preset="OCEAN_ROLLING")
+    u = lib.last_uuid()
+    _dom, ds = presets.domain(lib.entry(u))
+    lib.check(f"a new tank bakes {so.CACHE_SECONDS} s, so waves reach the far end, and the "
+              "timeline is extended to show it",
+              ds.cache_frame_start == 1 and ds.cache_frame_end == round(so.CACHE_SECONDS * _fps())
+              and sc.frame_end == ds.cache_frame_end, f"{ds.cache_frame_end} / {sc.frame_end}")
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
+    sc.frame_end = 1000
+    bpy.ops.aquasuite.simulated_ocean_create(preset="OCEAN_ROLLING")
+    u = lib.last_uuid()
+    lib.check("a longer timeline is left alone", sc.frame_end == 1000)
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
+    sc.frame_end = 250
     lib.check("wave-maker strength grows Calm < Rolling < Storm",
               strengths["OCEAN_CALM"] < strengths["OCEAN_ROLLING"] < strengths["OCEAN_STORM"],
               str({k: round(v, 4) for k, v in strengths.items()}))
@@ -221,31 +248,161 @@ def _surface(dom, frame):
 
 
 def _bake_and_measure(u):
-    """Wave height (crest to trough over the last full period) at the
-    mid-tank gauges and at the wall, plus first/last liquid volume."""
+    """Mid-tank and wall wave height (crest to trough) over the period ending
+    at CAL_FRAME; mid-tank, far-tank and per-0.5 m heights averaged over the
+    last PERIODS; first/last liquid volume and the bake time."""
     e = lib.entry(u)
     dom, ds = presets.domain(e)
     ds.cache_frame_start, ds.cache_frame_end = 1, FRAMES
     so.apply_period(e)  # fade-in starts at the cache start
+    import time
+    started = time.time()
     with bpy.context.temp_override(active_object=dom, object=dom, selected_objects=[dom],
                                    selected_editable_objects=[dom]):
         bpy.ops.fluid.bake_all()
+    seconds = time.time() - started
     period = round(e.wave_period * _fps())
     series, volumes = {}, []
-    for frame in [1] + list(range(FRAMES - period + 1, FRAMES + 1)):
+    frames = sorted({1, *range(CAL_FRAME - period + 1, CAL_FRAME + 1),
+                     *range(FRAMES - PERIODS * period + 1, FRAMES + 1)})
+    for frame in frames:
         tops, volume = _surface(dom, frame)
         series[frame] = tops
         volumes.append(volume)
-    last = [series[f] for f in range(FRAMES - period + 1, FRAMES + 1)]
+    late = [range(end - period + 1, end + 1)
+            for end in range(FRAMES - (PERIODS - 1) * period, FRAMES + 1, period)]
+    calibration = [range(CAL_FRAME - period + 1, CAL_FRAME + 1)]
 
-    def height(x):
-        zs = [t[x] for t in last if x in t]
-        return max(zs) - min(zs) if zs else 0.0
-    mid = sum(height(x) for x in MID_X) / len(MID_X)
-    return dict(mid=round(mid, 3), wall=round(height(WALL_X), 3),
-                gauges=[round(height(x), 3) for x in MID_X],
+    def height(x, windows):
+        """Crest to trough per period, averaged over the windows."""
+        hs = []
+        for window in windows:
+            zs = [series[f][x] for f in window if x in series[f]]
+            hs.append(max(zs) - min(zs) if zs else 0.0)
+        return sum(hs) / len(hs)
+
+    def gauges(xs, windows):
+        return sum(height(x, windows) for x in xs) / len(xs)
+    return dict(mid=round(gauges(MID_X, calibration), 3),
+                wall=round(height(WALL_X, calibration), 3),
+                gauges=[round(height(x, calibration), 3) for x in MID_X],
+                late_mid=round(gauges(MID_X, late), 3), far=round(gauges(FAR_X, late), 3),
+                late_wall=round(height(WALL_X, late), 3),
+                profile={x / 2: round(height(x / 2, late), 3) for x in range(-19, 20)},
+                bake_s=round(seconds),
                 volume=(round(volumes[0], 2), round(volumes[-1], 2)),
                 target=round(so.wave_plan(e)[0], 3))
+
+
+BUTTONS = [("Preview", 48), ("Medium", 96), ("High", 160), ("Ultra", 256)]
+
+
+class _Layout:
+    """Records the text a panel draw would show."""
+    def __init__(self, lines):
+        self.lines, self.alert, self.enabled = lines, False, True
+
+    def row(self, **_kw):
+        return _Layout(self.lines)
+    column = row
+
+    def label(self, text="", **_kw):
+        self.lines.append(text)
+
+    def operator(self, *_a, **_kw):
+        return type("Op", (), {})()
+
+    def prop(self, *_a, **_kw):
+        pass
+
+
+def _panel_text(e):
+    from aquasuite.ui import panel
+    lines = []
+    panel._draw_wave_limit(_Layout(lines), e)
+    return " ".join(lines)
+
+
+def test_resolution_warning():
+    need = {}
+    for key in ("OCEAN_CALM", "OCEAN_ROLLING", "OCEAN_STORM"):
+        bpy.ops.aquasuite.simulated_ocean_create(preset=key)
+        u = lib.last_uuid()
+        e = lib.entry(u)
+        dom, ds = presets.domain(e)
+        package = presets.CATALOG[key]['entry']
+        lib.check(f"{key}: the tank size the panel shows is the preset's, and the domain matches",
+                  tuple(round(v, 4) for v in e.tank_size) == tuple(package['tank_size'])
+                  and all(abs(a - b) < 1e-4 for a, b in zip(sw.object_dims(dom), e.tank_size))
+                  and e.base_resolution == package['resolution' if 'resolution' in package
+                                                    else 'base_resolution'],
+                  f"{tuple(e.tank_size)} res {e.base_resolution}")
+        need[key] = so.min_resolution(e)
+        lib.check(f"{key}: no resolution warning at the preset's own resolution",
+                  so.resolution_warning(e, BUTTONS) == '', so.resolution_warning(e, BUTTONS))
+        bpy.ops.aquasuite.assembly_delete(uuid=u)
+    lib.check("minimum resolution follows the measured limits: Calm 400, Rolling and Storm 160",
+              need == {"OCEAN_CALM": 400, "OCEAN_ROLLING": 160, "OCEAN_STORM": 160}, str(need))
+
+    bpy.ops.aquasuite.simulated_ocean_create(preset="OCEAN_ROLLING")
+    u = lib.last_uuid()
+    e = lib.entry(u)
+    e.base_resolution = 96
+    text = so.resolution_warning(e, BUTTONS)
+    lib.check("Medium (96) warns that Rolling's waves need 160 (High) to cross the tank",
+              "160" in text and "(High)" in text and "at 96" in text, text)
+    shown = _panel_text(e)
+    lib.check("the panel shows that warning with the panel's own button names",
+              "160 or more (High)" in shown, shown)
+    e.base_resolution = 160
+    e.draft = True
+    text = so.resolution_warning(e, BUTTONS)
+    lib.check("Draft at 160 warns that it halves the resolution to 80 and says to turn it off",
+              "Draft" in text and "80" in text and "Turn Draft off" in text, text)
+    lib.check("the panel shows the Draft warning", "Turn Draft off" in _panel_text(e), _panel_text(e))
+    e.draft = False
+    lib.check("no panel warning once Draft is off at 160", "resolution" not in _panel_text(e),
+              _panel_text(e))
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
+
+    bpy.ops.aquasuite.simulated_ocean_create(preset="OCEAN_CALM")
+    u = lib.last_uuid()
+    e = lib.entry(u)
+    e.base_resolution = 256
+    text = so.resolution_warning(e, BUTTONS)
+    lib.check("Calm at Ultra (256) still warns, naming 400 and Custom",
+              "400" in text and "(Custom)" in text, text)
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
+
+
+def test_old_calm_tank():
+    """A Calm tank saved before 0.20 (20 x 8 x 4 m at resolution 200) keeps
+    its own size and resolution: the catalogue change does not touch it."""
+    import json
+    bpy.ops.aquasuite.simulated_ocean_create(preset="OCEAN_CALM")
+    u = lib.last_uuid()
+    e = lib.entry(u)
+    with presets.applying(e):
+        e.tank_size = (20.0, 8.0, 4.0)
+        e.base_resolution = 200
+        so.apply_settings(bpy.context, e)
+    saved = json.loads(e.preset_snapshot)
+    e.preset_snapshot = json.dumps(presets.snapshot(e, saved), sort_keys=True)
+    path = lib.save_blend("ocean_old_calm")
+    bpy.ops.wm.open_mainfile(filepath=path)
+    e = lib.entry(u)
+    dom, ds = presets.domain(e)
+    lib.check("an old Calm tank reopens unchanged and not marked modified",
+              tuple(e.tank_size) == (20.0, 8.0, 4.0) and e.base_resolution == 200
+              and ds.resolution_max == 200 and not presets.is_modified(e)
+              and all(abs(a - b) < 1e-4 for a, b in zip(sw.object_dims(dom), (20, 8, 4))),
+              f"{tuple(e.tank_size)} res {e.base_resolution}/{ds.resolution_max}")
+    so.apply_period(e)  # what Bake does first
+    lib.check("baking it keeps its size and resolution, and the panel says 400 would carry its waves",
+              all(abs(a - b) < 1e-4 for a, b in zip(sw.object_dims(dom), (20, 8, 4)))
+              and ds.resolution_max == 200 and "400" in so.resolution_warning(e, BUTTONS),
+              so.resolution_warning(e, BUTTONS))
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
 
 
 def test_bake_wave_heights():
@@ -260,12 +417,16 @@ def test_bake_wave_heights():
         bpy.ops.aquasuite.simulated_ocean_create(preset=key)
         uid = lib.last_uuid()
         waves[key] = w = _bake_and_measure(uid)
-        print(f"[ocean bake] {key}: {w}", flush=True)
+        print(f"{lib.TAG} INFO | [ocean bake] {key}: {w}", flush=True)
         from aquasuite.core import delete
         delete.delete_assembly(lib.scene(), uid, delete_cache=True)
         v0, v1 = w['volume']
-        lib.check(f"{key}: mid-tank waves within 35% of the {w['target']} m target",
+        lib.check(f"{key}: mid-tank waves at 12 s within 35% of the {w['target']} m target",
                   abs(w['mid'] - w['target']) <= 0.35 * w['target'], str(w))
+        lib.check(f"{key}: waves reach the far end (x +4..+6 at 30 s at least "
+                  f"{FAR_SHARE:.0%} of mid-tank)", w['far'] >= FAR_SHARE * w['mid'], str(w))
+        lib.check(f"{key}: reflections do not run away (mid-tank at 30 s at most "
+                  f"{LATE_LIMIT}x the target)", w['late_mid'] <= LATE_LIMIT * w['target'], str(w))
         lib.check(f"{key}: the wall is not overdriven (at most 2.5x mid-tank)",
                   w['wall'] <= 2.5 * w['mid'], str(w))
         lib.check(f"{key}: liquid volume conserved within 1%",

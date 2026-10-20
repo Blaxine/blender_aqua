@@ -49,13 +49,14 @@ CATALOG = {
     'HOSE_SPRINKLER': _package(C.MODE_HOSE, 'Sprinkler', draft=False, spray=0.55,
                               foam=0.25, regime='SPRAY', pressure=0.5,
                               spread=25.0, nozzle_radius=0.025, hose_liquid=True),
-    # Waves under about one cell high do not travel: Mantaflow's surface
-    # holds sub-cell slopes as flat terraces.  Calm's 0.12 m waves need
-    # 10 cm cells (at 12.5 cm they die within 3 m of the wave maker);
+    # Waves under about one cell high do not travel: Blender's liquid solver
+    # places the free surface on whole cells.  Calm's 0.12 m waves stalled
+    # 12 m out at 10 cm cells; 5 cm cells carry them to the far wall.  A
+    # narrower, shallower tank keeps that affordable (2.5x Rolling's cells).
     # Rolling and Storm span 3+ cells at 12.5 cm.
-    'OCEAN_CALM': _package(C.MODE_SIMOCEAN, 'Calm', resolution=200, draft=False,
+    'OCEAN_CALM': _package(C.MODE_SIMOCEAN, 'Calm', resolution=400, draft=False,
                           wave_height=0.12,
-                          wave_period=3.5, tank_size=(20.0, 8.0, 4.0)),
+                          wave_period=3.5, tank_size=(20.0, 4.0, 2.5)),
     'OCEAN_ROLLING': _package(C.MODE_SIMOCEAN, 'Rolling Waves', resolution=160,
                              draft=False, wave_height=0.45,
                              wave_period=2.4, tank_size=(20.0, 8.0, 4.0)),

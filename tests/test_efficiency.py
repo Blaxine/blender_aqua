@@ -76,7 +76,9 @@ def test_narrow_updates_and_budget():
     lib.check('recreated whitewater inherits Preview',
               all(p.settings.display_percentage <= 25 for p in dom.particle_systems
                   if p.settings.get(whitewater.ROLE)))
-    lib.check('budget reduces shared generation', ds.sndparticle_sampling_wavecrest == 40)
+    # 200 x 0.2 = 40, and ocean tanks sample a quarter of that (whitewater.apply).
+    lib.check('budget reduces shared generation', ds.sndparticle_sampling_wavecrest == 10,
+              str(ds.sndparticle_sampling_wavecrest))
     foam = whitewater._instance(entry, 'foam').data.materials[0]
     out = next(n for n in foam.node_tree.nodes if n.type == 'OUTPUT_MATERIAL')
     lib.check('full-density whitewater bypasses transparency mix',

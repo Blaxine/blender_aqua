@@ -164,6 +164,15 @@ def apply(entry, force=False):
                       sndparticle_potential_max_energy=5.0 - 3.0 * amount,
                       sndparticle_sampling_wavecrest=max(1, round(200 * amount)),
                       sndparticle_sampling_trappedair=max(1, round(40 * amount)))
+        if entry.mode == C.MODE_SIMOCEAN:
+            # A whole tank of breaking waves spawns without pause: at Blender's
+            # 4-10 s lifetimes (10-25 solver units; 1 s = 2.5 units at any fps)
+            # Storm Surf passed 10 million particles by frame 300 and Blender
+            # crashed loading them.  1-3 s and a quarter of the sampling level
+            # off a 720-frame storm at a few million.
+            values['sndparticle_sampling_wavecrest'] = max(1, round(values['sndparticle_sampling_wavecrest'] / 4))
+            values['sndparticle_sampling_trappedair'] = max(1, round(values['sndparticle_sampling_trappedair'] / 4))
+            values.update(sndparticle_life_min=2.5, sndparticle_life_max=7.5)
         for name, value in values.items():
             _set(ds, name, value)
     for element in ELEMENTS:
