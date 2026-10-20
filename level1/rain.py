@@ -5,7 +5,7 @@ import bpy
 import bmesh
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 
 
@@ -27,13 +27,15 @@ def make_plane(name, size, mode, uid, col):
 
 
 def make_droplet(name, mode, uid, col, streak=True):
-    """UV sphere 8x6, scaled (1,1,2.4): perceived streak shape (§6.2.2)."""
+    """UV sphere 8x6 stretched 2.4x along local X: perceived streak shape
+    (§6.2.2).  X, because particle rotation mode VEL points the instance's
+    X axis along the velocity."""
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.008)
     if streak:
         for v in bm.verts:
-            v.co.z *= 2.4
+            v.co.x *= 2.4
     bm.to_mesh(mesh)
     bm.free()
     obj = naming.new_mesh_object(col, name, mesh, mode, uid)
@@ -55,7 +57,10 @@ def configure_rain_settings(ps, droplet, intensity=1.0, area=10.0,
     ps.normal_factor = 0.0
     ps.object_align_factor[0] = wind
     ps.object_align_factor[2] = -fall_speed
-    ps.effector_weights.gravity = 1.0
+    # Raindrops fall at terminal velocity: constant speed, no further
+    # acceleration.  A constant velocity also keeps each streak (aligned
+    # to the velocity at birth by rotation mode VEL) along its path.
+    ps.effector_weights.gravity = 0.0
     ps.brownian_factor = 0.02
     ps.render_type = "OBJECT"
     ps.instance_object = droplet
@@ -83,6 +88,7 @@ class AQS_OT_rain_create(bpy.types.Operator):
     bl_description = "A plane that rains — press Play"
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()

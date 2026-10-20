@@ -9,7 +9,7 @@ import bmesh
 from mathutils import Matrix, Vector
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 from . import rain as rain_mod
 
@@ -81,6 +81,7 @@ class AQS_OT_snow_create(bpy.types.Operator):
     bl_description = "Soft-falling, tumbling snow with 7 instanced flake shapes"
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()

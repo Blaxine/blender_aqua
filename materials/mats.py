@@ -24,6 +24,12 @@ def _pset(node, names, value):
     return False
 
 
+def _water_refraction(mat):
+    for flag in ('use_raytrace_refraction', 'use_screen_refraction'):
+        if hasattr(mat, flag):
+            setattr(mat, flag, True)
+
+
 def _new_mat(name, mode, uuid_):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -45,6 +51,7 @@ def assign(obj, mat):
 
 def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
     mat = _new_mat(name, mode, uuid_)
+    _water_refraction(mat)
     nt = mat.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -67,6 +74,7 @@ def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
 
 def droplet(mode, uuid_):
     mat = _new_mat("AQS_MAT_Droplet", mode, uuid_)
+    _water_refraction(mat)
     nt = mat.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -141,3 +149,92 @@ def mist(mode, uuid_):
         except (AttributeError, TypeError):
             pass
     return mat
+
+
+AOV_NAMES = {'liquid': 'AQS_Liquid', 'spray': 'AQS_Spray',
+             'foam': 'AQS_Foam', 'bubbles': 'AQS_Bubbles'}
+
+
+def element_aov(mat, element, value_socket=None):
+    """Idempotent scalar mask; separate materials supply Cryptomatte IDs."""
+    if not mat.use_nodes:
+        return
+    nt = mat.node_tree
+    node = next((n for n in nt.nodes if n.type == 'OUTPUT_AOV'
+                 and n.get('aqs_aov_element') == element), None)
+    if node is None:
+        node = nt.nodes.new('ShaderNodeOutputAOV')
+        node['aqs_aov_element'] = element
+    if hasattr(node, 'aov_name'):
+        node.aov_name = AOV_NAMES[element]
+    else:
+        node.name = AOV_NAMES[element]  # older 4.x API
+    if node.inputs['Value'].default_value != 1.0:
+        node.inputs['Value'].default_value = 1.0
+    if value_socket is not None:
+        nt.links.new(value_socket, node.inputs['Value'])
+
+
+def whitewater(mode, uuid_, element):
+    mat = _new_mat('AQS_' + element.title(), mode, uuid_)
+    _water_refraction(mat)
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    if element == 'foam':
+        shader = nt.nodes.new('ShaderNodeBsdfDiffuse')
+        shader.inputs['Color'].default_value = (0.93, 0.97, 1.0, 1.0)
+        shader.inputs['Roughness'].default_value = 0.6
+    else:
+        shader = nt.nodes.new('ShaderNodeBsdfGlass')
+        shader.inputs['IOR'].default_value = 1.33
+        shader.inputs['Roughness'].default_value = 0.08
+    info = nt.nodes.new('ShaderNodeObjectInfo')
+    mask = nt.nodes.new('ShaderNodeMath')
+    mask.operation = 'LESS_THAN'
+    mask['aqs_amount'] = True
+    mask.inputs[1].default_value = 1.0
+    nt.links.new(info.outputs['Random'], mask.inputs[0])
+    transparent = nt.nodes.new('ShaderNodeBsdfTransparent')
+    mix = nt.nodes.new('ShaderNodeMixShader')
+    nt.links.new(mask.outputs[0], mix.inputs[0])
+    nt.links.new(transparent.outputs[0], mix.inputs[1])
+    nt.links.new(shader.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs['Surface'])
+    element_aov(mat, element, mask.outputs[0])
+    if hasattr(mat, 'surface_render_method'):
+        mat.surface_render_method = 'DITHERED'
+    elif hasattr(mat, 'blend_method'):
+        mat.blend_method = 'HASHED'
+    return mat
+
+
+def whitewater_amount(mat, fraction):
+    nt = mat.node_tree
+    for node in nt.nodes:
+        if node.get('aqs_amount'):
+            value = max(0.0, min(1.0, fraction))
+            if node.inputs[1].default_value != value:
+                node.inputs[1].default_value = value
+            # Full-density elements need neither random thinning nor a
+            # transparent closure. Keep the branch available for later edits.
+            mix = next((l.to_node for l in node.outputs[0].links
+                        if l.to_node.type == 'MIX_SHADER'), None)
+            if mix and mix.inputs[2].links:
+                shader = mix.inputs[2].links[0].from_node
+                target = shader.outputs[0] if value >= 1.0 else mix.outputs[0]
+                for out in nt.nodes:
+                    if out.type == 'OUTPUT_MATERIAL':
+                        socket = out.inputs['Surface']
+                        if socket.links and socket.links[0].from_node in (mix, shader):
+                            if socket.links[0].from_socket != target:
+                                nt.links.new(target, socket)
+            for out in nt.nodes:
+                if out.type == 'OUTPUT_AOV' and out.get('aqs_aov_element'):
+                    socket = out.inputs['Value']
+                    if value >= 1.0:
+                        for link in list(socket.links):
+                            if link.from_node == node:
+                                nt.links.remove(link)
+                    elif not socket.links:
+                        nt.links.new(node.outputs[0], socket)

@@ -8,6 +8,7 @@ constant factors symbolically; the handler evaluates them numerically.
 """
 
 import math
+from functools import lru_cache
 
 G = 9.81                 # scene gravity magnitude
 AMP_DECAY = 0.65         # A_i = Amplitude * AMP_DECAY**i
@@ -16,7 +17,7 @@ N_LAYERS = 5
 TWO_PI = 2.0 * math.pi
 
 # Fixed deterministic per-layer direction offsets (radians, scaled by the
-# user 'Spread' input).  Table is frozen: changing it is a BUILD_TAG bump.
+# user 'Spread' input).  Table is frozen: changing it is a WAVE_TABLE_TAG bump.
 DIR_OFFSETS = (0.0, 0.31, -0.47, 0.83, -0.71, 1.13, -1.02, 0.56)
 
 
@@ -59,11 +60,20 @@ _FIR_W = tuple(math.exp(-2.0 * (j / (_FIR_K - 1)) ** 2) for j in range(_FIR_K))
 _FIR_NORM = sum(_FIR_W)
 
 
+@lru_cache(maxsize=256)
+def _filtered_layers(layers, smoothing):
+    """Exact FIR response as amplitude/phase; bounded, value-keyed cache."""
+    dt = smoothing / _FIR_K
+    result = []
+    for amp, k, omega, cx, sy, _qa in layers:
+        real = sum(w * math.cos(omega * j * dt) for j, w in enumerate(_FIR_W)) / _FIR_NORM
+        imag = sum(w * math.sin(omega * j * dt) for j, w in enumerate(_FIR_W)) / _FIR_NORM
+        result.append((amp * math.hypot(real, imag), k, omega, cx, sy, math.atan2(imag, real)))
+    return tuple(result)
+
+
 def smoothed_height(layers, x, y, t, smoothing):
     if smoothing <= 1e-6:
         return height(layers, x, y, t)
-    dt = smoothing / _FIR_K
-    acc = 0.0
-    for j, w in enumerate(_FIR_W):
-        acc += w * height(layers, x, y, t - j * dt)
-    return acc / _FIR_NORM
+    return sum(amp * math.sin(k * (x * cx + y * sy) - omega * t + phase)
+               for amp, k, omega, cx, sy, phase in _filtered_layers(tuple(layers), smoothing))

@@ -22,7 +22,9 @@ def owner_tag(mode, assembly_uuid):
 
 def tag(id_block, mode, assembly_uuid):
     """Stamp any ID datablock as owned by an assembly."""
-    id_block[C.OWNER_PROP] = owner_tag(mode, assembly_uuid)
+    value = owner_tag(mode, assembly_uuid)
+    if id_block.get(C.OWNER_PROP) != value:
+        id_block[C.OWNER_PROP] = value
     return id_block
 
 
@@ -31,15 +33,23 @@ def owned_by(id_block, assembly_uuid):
     return isinstance(v, str) and v.endswith(":" + assembly_uuid)
 
 
+ROOT_PROP = "aqs_assembly_root"
+
+
 def ensure_root_collection(scene):
-    root = bpy.data.collections.get(C.ROOT_COLLECTION)
-    if root is None:
-        root = bpy.data.collections.new(C.ROOT_COLLECTION)
-    if root.name not in {c.name for c in scene.collection.children}:
-        try:
-            scene.collection.children.link(root)
-        except RuntimeError:
-            pass
+    # Reuse only this scene's managed root. Older roots can be recognized
+    # by the registry's assembly collections without trusting their names.
+    assemblies = {e.root_collection for e in scene.aqs_assemblies if e.root_collection}
+    for root in scene.collection.children:
+        managed = root.get(ROOT_PROP) or any(c in assemblies for c in root.children)
+        shared = any(other != scene and root in tuple(other.collection.children_recursive)
+                     for other in bpy.data.scenes)
+        if managed and not shared:
+            root[ROOT_PROP] = True
+            return root
+    root = bpy.data.collections.new(C.ROOT_COLLECTION)
+    root[ROOT_PROP] = True
+    scene.collection.children.link(root)
     return root
 
 

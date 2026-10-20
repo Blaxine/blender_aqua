@@ -9,7 +9,7 @@ import bpy
 import bmesh
 
 from .. import constants as C
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 from . import rain as rain_mod
 
@@ -23,7 +23,13 @@ def _safe(o, attr, value):
 
 
 def _dpaint_toggle(context, obj, dp_type):
-    """Create canvas/brush settings via the operator (required by the API)."""
+    """Create canvas/brush settings via the operator (required by the API).
+
+    type_toggle only acts on an EXISTING Dynamic Paint modifier — without
+    one it silently returns CANCELLED — so make sure the modifier is there.
+    """
+    if not any(m.type == "DYNAMIC_PAINT" for m in obj.modifiers):
+        obj.modifiers.new("AQS Dynamic Paint", "DYNAMIC_PAINT")
     with context.temp_override(active_object=obj, object=obj,
                                selected_objects=[obj]):
         bpy.ops.dpaint.type_toggle(type=dp_type)
@@ -92,6 +98,7 @@ class AQS_OT_rain_reactive_create(bpy.types.Operator):
                       "ripple (Dynamic Paint waves)")
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()
@@ -123,8 +130,9 @@ class AQS_OT_rain_reactive_create(bpy.types.Operator):
             configure_canvas(context, floor)
             configure_brush(context, emitter, psys)
         except RuntimeError as exc:
-            self.report({"ERROR"}, str(exc))
-            return {"CANCELLED"}
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't create Reactive Rain",
+                               exc, mode=C.MODE_RRAIN)
 
         registry.add(scene, C.MODE_RRAIN, uid, primary=floor,
                      root_collection=col)
@@ -155,11 +163,22 @@ class AQS_OT_bake_ripples(bpy.types.Operator):
         try:
             with context.temp_override(active_object=floor, object=floor,
                                        point_cache=surf.point_cache):
-                bpy.ops.ptcache.bake(bake=True)
+                # A background job (progress bar, Esc stops it); blocking
+                # only when headless.
+                bpy.ops.ptcache.bake(
+                    "EXEC_DEFAULT" if bpy.app.background else "INVOKE_DEFAULT",
+                    bake=True)
         except Exception as exc:
-            self.report({"ERROR"}, f"Bake failed: {exc}")
-            return {"CANCELLED"}
-        self.report({"INFO"}, "Ripples baked")
+            from ..core import errors
+            return errors.fail(self, "AquaSuite couldn't bake the ripples", exc,
+                               mode=C.MODE_RRAIN, uuid=self.uuid)
+        if bpy.app.background:
+            self.report({"INFO"}, "Ripples baked")
+        else:
+            from ..core import bakes
+            bakes.watch()
+            self.report({"INFO"}, "Baking ripples in the background — "
+                                  "press Esc to stop")
         return {"FINISHED"}
 
 

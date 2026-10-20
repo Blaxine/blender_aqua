@@ -19,7 +19,7 @@ from bpy.props import StringProperty
 
 from .. import constants as C
 from .. import gerstner
-from ..core import naming, registry
+from ..core import delete, naming, registry
 from ..materials import mats
 
 MODIFIER_NAME = "AquaSuite Ocean"
@@ -59,7 +59,7 @@ def _math(nt, op, a=None, b=None, value0=None, value1=None):
 def build_ocean_tree(mode, uuid_):
     nt = bpy.data.node_groups.new(NG_NAME, "GeometryNodeTree")
     naming.tag(nt, mode, uuid_)
-    nt[C.BUILD_PROP] = C.BUILD_TAG
+    nt[C.WAVE_TABLE_PROP] = C.WAVE_TABLE_TAG
     nt.is_modifier = True
 
     iface = nt.interface
@@ -167,12 +167,23 @@ def build_ocean_tree(mode, uuid_):
 # Modifier input IO (identifier-tolerant)
 # --------------------------------------------------------------------------
 
-def find_ocean_modifier(obj):
+def find_ocean_modifier(obj, assembly_uuid=None):
+    """The GN modifier running an AquaSuite ocean tree.
+
+    Identified by the node group's ``aqs_owner`` tag, never its name —
+    users may rename the tree (README: "Names are yours").  With
+    ``assembly_uuid`` only that assembly's tree matches.
+    """
     if obj is None:
         return None
     for mod in obj.modifiers:
-        if mod.type == "NODES" and mod.node_group and \
-                mod.node_group.name.startswith(NG_NAME):
+        if mod.type != "NODES" or mod.node_group is None:
+            continue
+        owner = mod.node_group.get(C.OWNER_PROP, "")
+        if not isinstance(owner, str) \
+                or not owner.startswith(C.MODE_OCEAN + ":"):
+            continue
+        if assembly_uuid is None or owner.endswith(":" + assembly_uuid):
             return mod
     return None
 
@@ -199,7 +210,7 @@ def get_input(mod, name):
 
 def set_input(mod, name, value):
     ident = _socket_identifier(mod, name)
-    if ident is not None:
+    if ident is not None and get_input(mod, name) != value:
         mod[ident] = value
         mod.id_data.update_tag()
 
@@ -227,6 +238,7 @@ class AQS_OT_ocean_create(bpy.types.Operator):
     bl_description = "One-click Gerstner ocean surface with buoy support"
     bl_options = {"REGISTER", "UNDO"}
 
+    @delete.guarded_create
     def execute(self, context):
         scene = context.scene
         uid = naming.new_uuid()
@@ -326,11 +338,7 @@ class AQS_OT_ocean_detach_buoy(bpy.types.Operator):
         if entry is None or self.buoy_index >= len(entry.buoys):
             return {"CANCELLED"}
         b = entry.buoys[self.buoy_index]
-        if b.obj is not None:
-            for n in [n for n in (b.added_constraints or "").split(";") if n]:
-                con = b.obj.constraints.get(n)
-                if con:
-                    b.obj.constraints.remove(con)
+        delete.restore_buoy(b)
         if b.empty is not None:
             bpy.data.objects.remove(b.empty, do_unlink=True)
         entry.buoys.remove(self.buoy_index)
