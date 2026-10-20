@@ -144,6 +144,14 @@
 - **Other force fields have no effect on the tank:** each tank only listens to
   force fields in its own collection, so its calibrated waves stay as set. Move
   a field into the tank's collection to make it push the water.
+- **Console shows `Failed to add relation "Animation -> Rigid Body"` for an
+  ocean tank:** this is harmless. Stock Blender prints it for any keyframed
+  force field in a scene without a Rigid Body World. The trace under it
+  (Domain → tank collection → Wavemaker) is not a dependency cycle. Tanks
+  saved with 0.20.0 keyframed their wave maker; their next Bake (or any wave
+  edit) switches it to a driver with exactly the same strength, and the
+  message stops. New tanks never print it. It does not affect the bake, and
+  adding a Rigid Body World is not needed.
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Ocean (Simulated): tank build, wave-maker forcing per preset,
-default cache length, legacy paddle tanks and their upgrade, obstacles,
+default cache length, legacy paddle tanks and their upgrade, 0.20.0
+keyframed wave makers and their switch to a driver, obstacles,
 delete; with --bake, each preset makes waves of about its target height
 mid-tank that still reach the far end, Calm < Rolling < Storm,
 without losing water or overdriving the wall."""
@@ -33,7 +34,7 @@ WALL_X = -9.5
 
 
 def _generator(obj, e, path):
-    curve = so._curve(obj, e, path, 0 if path == 'location' else None)
+    curve = so._strength_curve(obj, e) if path == 'field.strength' else so._curve(obj, e, path, 0)
     return curve, next(m for m in curve.modifiers if m.type == 'FNGENERATOR')
 
 
@@ -74,6 +75,12 @@ def test_build_and_presets():
                   f"zone {field.distance_max:.2f} radial {field.radial_max:.2f}")
         lib.check(f"{key}: only this tank's own fields push its water",
                   ds.effector_weights.collection == e.root_collection)
+        drivers = maker.animation_data.drivers
+        lib.check(f"{key}: strength is a frame driver, not keyframed (no 'Animation -> Rigid "
+                  "Body' console warning) and runs without Python auto-run",
+                  maker.animation_data.action is None and len(drivers) == 1
+                  and drivers[0].driver.is_valid and drivers[0].driver.is_simple_expression,
+                  f"action {maker.animation_data.action} drivers {len(drivers)}")
         bpy.ops.aquasuite.assembly_delete(uuid=u)
     sc = lib.scene()
     sc.frame_start, sc.frame_end = 1, 250
@@ -151,10 +158,7 @@ def _make_legacy_tank(key="OCEAN_ROLLING"):
     bpy.ops.aquasuite.simulated_ocean_create(preset=key)
     u = lib.last_uuid()
     e = lib.entry(u)
-    maker = so._part(e, "wavemaker")
-    action = maker.animation_data.action
-    bpy.data.objects.remove(maker, do_unlink=True)
-    bpy.data.actions.remove(action)
+    bpy.data.objects.remove(so._part(e, "wavemaker"), do_unlink=True)
     _dom, ds = presets.domain(e)
     ds.effector_weights.collection = None
     paddle = so._box(e.root_collection, u, 'paddle')
@@ -206,12 +210,77 @@ def test_legacy_paddle_tank():
               and maker.field.type == 'WIND' and abs(e.wave_period - 3.1) < 1e-6
               and ds.effector_weights.collection == e.root_collection)
     owned = [a.name for a in bpy.data.actions if a.get(lib.C.OWNER_PROP)]
-    lib.check("upgrade removes the paddle animation (only the wave maker's remains)",
-              owned == [maker.animation_data.action.name], str(owned))
+    lib.check("upgrade removes the paddle animation (the wave maker uses a driver)",
+              owned == [] and len(maker.animation_data.drivers) == 1, str(owned))
     bpy.ops.aquasuite.assembly_delete(uuid=u)
     lib.check("deleting the upgraded tank leaves nothing tagged",
               lib.tagged_left() == [] and not any(
                   a.get(lib.C.OWNER_PROP) for a in bpy.data.actions), str(lib.tagged_left()))
+
+
+def _make_020_tank(key="OCEAN_ROLLING"):
+    """A tank as 0.20.0 built it: the wave maker's strength keyframed in an
+    action (the same constant key and sine modifier) instead of a driver."""
+    bpy.ops.aquasuite.simulated_ocean_create(preset=key)
+    u = lib.last_uuid()
+    e = lib.entry(u)
+    maker = so._part(e, "wavemaker")
+    _driven, gen = _generator(maker, e, "field.strength")
+    names = ('function_type', 'use_additive', 'amplitude', 'phase_multiplier', 'phase_offset',
+             'value_offset', 'use_restricted_range', 'frame_end', 'frame_start', 'blend_in',
+             'blend_out')
+    settings = {n: getattr(gen, n) for n in names}
+    maker.driver_remove('field.strength')
+    curve = so._curve(maker, e, 'field.strength')
+    curve.keyframe_points[0].co.y = 0
+    curve.keyframe_points[0].interpolation = 'CONSTANT'
+    old = curve.modifiers.new('FNGENERATOR')
+    for name, value in settings.items():
+        setattr(old, name, value)
+    return u
+
+
+def _strengths(u):
+    sc = lib.scene()
+    maker = so._part(lib.entry(u), "wavemaker")
+    values = []
+    for frame in (1, 13, 37, 100, 301):
+        for sub in (0.0, 0.5):
+            sc.frame_set(frame, subframe=sub)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            values.append(maker.evaluated_get(depsgraph).field.strength)
+    sc.frame_set(1)
+    return values
+
+
+def test_020_keyframed_tank():
+    u = _make_020_tank()
+    e = lib.entry(u)
+    maker = so._part(e, "wavemaker")
+    before = _strengths(u)
+    lib.check("a 0.20.0 tank keyframes its wave-maker strength (test setup)",
+              maker.animation_data.action is not None and not maker.animation_data.drivers
+              and max(map(abs, before)) > 0, str([round(v, 4) for v in before]))
+    path = lib.save_blend("ocean_020")
+    bpy.ops.wm.open_mainfile(filepath=path)
+    e = lib.entry(u)
+    maker = so._part(e, "wavemaker")
+    lib.check("after reopening, the 0.20.0 tank is unchanged (still keyframed, same strength)",
+              maker.animation_data.action is not None and not maker.animation_data.drivers
+              and _strengths(u) == before)
+    so.apply_period(e)  # what Bake and every wave edit run first
+    e = lib.entry(u)
+    maker = so._part(e, "wavemaker")
+    drivers = maker.animation_data.drivers
+    after = _strengths(u)
+    lib.check("its next bake swaps the action for the driver with identical strength",
+              maker.animation_data.action is None and len(drivers) == 1
+              and drivers[0].driver.is_simple_expression and after == before
+              and not any(a.get(lib.C.OWNER_PROP) for a in bpy.data.actions),
+              f"max diff {max(abs(a - b) for a, b in zip(after, before)):.3g}")
+    bpy.ops.aquasuite.assembly_delete(uuid=u)
+    lib.check("deleting the converted tank leaves nothing tagged", lib.tagged_left() == [],
+              str(lib.tagged_left()))
 
 
 def test_obstacle_in_tank():
