@@ -268,6 +268,29 @@ script; they have not been looked at in the UI.
      (`core/whitewater.py`, applied at every bake): a 720-frame Storm baked
      in 499 s with no crash, the particle cache levels off at 26–29 MB/frame,
      and the liquid volume changed +0.15% (peak +0.32%).
+  13. *Console warning at tank creation is not a dependency cycle.* Creating
+     a tank prints `Failed to add relation "Animation -> Rigid Body"` with a
+     trace Domain → tank collection → Wavemaker. That trace is the path
+     Blender followed to reach the wave maker, not a loop; no "Dependency
+     cycle detected" line appears. Blender adds this relation for every
+     keyframed force field (`build_animdata_force`), and it fails when the
+     scene has no rigid body world. Repro on stock Blender 4.5.4 and 5.2.2
+     with no add-on: an empty with a Wind field and one keyframe on its
+     strength prints it once; with no keyframe, nothing. Moving the wave
+     maker into a child collection without the domain still prints it, so
+     the effector collection is not the cause. It reappears on each
+     relations rebuild and does not affect the bake. **Fix: the strength is
+     a driver**, not an action. The driver has the expression `frame`, a
+     simple expression that runs without Python auto-run. Its curve is the
+     same constant 0 key plus sine modifier, so the strength is identical:
+     60 samples, frames 1–719 including subframes, on 4.5 and 5.2. Drivers
+     are not an animation component, so creating a tank prints nothing.
+     The domain's fluid step waits only for the wave maker's transform, with
+     either the action or the driver, so the evaluation order is unchanged.
+     A tank saved with 0.20.0 opens unchanged, still keyframed; `apply_period`
+     (run by every Bake and wave edit) swaps its action for the driver
+     (`_strength_curve`; fast test `test_020_keyframed_tank`). Re-baked
+     heights are under S023.
 - [ ] **S021 — Apply review-supported preset tuning.** Update preset values only
   once the visual review establishes the needed changes. Recheck all affected
   presets after tuning.
@@ -309,6 +332,10 @@ script; they have not been looked at in the UI.
   | Calm (res 400, 20×4×2.5 m) | 0.12 m | 0.116 m (0.129, 0.106, 0.102, 0.130, 0.115) | 0.105 m | 0.078 m | 0.119 / 0.084 m | 104.26 → 104.82 m³ (+0.54%) | 1219 / 1112 s |
   | Rolling Waves (res 160) | 0.45 m | 0.400 m (0.372, 0.405, 0.400, 0.422, 0.398) | 0.280 m | 0.356 m | 0.521 / 0.468 m | 322.30 → 323.66 m³ (+0.42%) | 291 / 249 s |
   | Storm Surf (res 160) | 0.90 m | 0.937 m (0.891, 0.908, 0.913, 0.951, 1.020) | 1.801 m | 1.683 m | 1.093 / 1.561 m | 322.30 → 322.78 m³ (+0.15%) | 504 / 466 s |
+
+  Re-baked after the wave maker's strength became a driver (S020 point 13):
+  every height and volume above is identical on 4.5 and 5.2 (70/70 checks
+  each); bake times 1367 / 315 / 542 s on 4.5 and 1161 / 272 / 477 s on 5.2.
 
   The far wall reflects almost everything, so after about 19 s the tank holds
   a partial standing wave whose nodes drift. Rolling's far half keeps 0.6–0.7 ×

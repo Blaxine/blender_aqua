@@ -170,6 +170,14 @@
   an access violation). Headless it never ends first. AquaSuite's Free Bake
   (`aquasuite.free_fluid`) frees on the spot, and Bake Again frees first, so
   scripts should call those. Blender 5.2 is not affected.
+- **Console shows `Failed to add relation "Animation -> Rigid Body"` for an
+  ocean tank:** this is harmless. Stock Blender prints it for any keyframed
+  force field in a scene without a Rigid Body World. The trace under it
+  (Domain → tank collection → Wavemaker) is not a dependency cycle. Tanks
+  saved with 0.20.0 keyframed their wave maker; their next Bake (or any wave
+  edit) switches it to a driver with exactly the same strength, and the
+  message stops. New tanks never print it. It does not affect the bake, and
+  adding a Rigid Body World is not needed.
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.
