@@ -60,10 +60,28 @@ def _draw_floaters(box, entry):
     for i, b in enumerate(entry.buoys):
         row = box.row(align=True)
         row.label(text=b.obj.name if b.obj else "<missing>", icon="MESH_UVSPHERE")
-        row.prop(b, "offset", text="Offset")
+        row.prop(b, "material", text="")
         op = row.operator("aquasuite.ocean_detach_buoy", text="", icon="X")
         op.uuid = entry.uuid
         op.buoy_index = i
+        row = box.row(align=True)
+        if b.material == "CUSTOM":
+            row.prop(b, "density")
+        sub = row.row(align=True)
+        sub.enabled = b.material == "MANUAL"
+        sub.prop(b, "offset", text="Offset")
+        if b.material != "MANUAL" and b.obj is not None:
+            from ..level2 import floaters
+            if b.density >= floaters.RHO_WATER:
+                warn = box.row()
+                warn.alert = True
+                warn.label(text="Sinks: a Plane Ocean floater must be lighter "
+                                "than water", icon="ERROR")
+            elif not floaters.is_closed(b.obj):
+                warn = box.row()
+                warn.alert = True
+                warn.label(text="The mesh has holes: set the offset by hand",
+                           icon="ERROR")
 
 
 def _draw_particles(box, entry, fields=('count', 'lifetime', 'particle_size')):
@@ -229,6 +247,11 @@ def _draw_bake(box, entry, op_bake, op_free=None, mandatory=True):
     op = sub.operator(op_bake, icon="RENDER_ANIMATION", text=text,
                       depress=baked)
     op.uuid = entry.uuid
+    if baked and entry.sources_changed:
+        warn = box.row()
+        warn.alert = True
+        warn.label(text="Water meshes changed — Bake Again to include them",
+                   icon="ERROR")
     if op_free:
         sub = row.row(align=True)
         sub.alert = True
@@ -344,7 +367,13 @@ def _draw_spec(box, context, entry):
             row.operator('aquasuite.rain_sim_add_pool', text='', icon='ADD').uuid = entry.uuid
             if entry.show_advanced:
                 for rec in entry.pool_sources:
-                    box.label(text=rec.obj.name if rec.obj else '<missing>')
+                    row = box.row(align=True)
+                    row.label(text=rec.obj.name if rec.obj else '<missing>')
+                    if rec.obj:
+                        op = row.operator('aquasuite.water_source_remove', text='', icon='X')
+                        op.uuid, op.name = entry.uuid, rec.obj.name
+        elif control == 'water_sources':
+            _draw_water_sources(box, entry)
         elif control == 'rain_tools':
             for op_id, label in (('rain_sim_rebuild_emitter', 'Rebuild Emitter'), ('rain_sim_optimize', 'Optimize Visible Rain'), ('rain_sim_check', 'Check Pool Link'), ('rain_sim_fit_domain', 'Fit Domain')):
                 box.operator('aquasuite.' + op_id, text=label).uuid = entry.uuid
@@ -369,7 +398,26 @@ def _draw_spec(box, context, entry):
         elif control == 'obstacles':
             _draw_obstacles(box, context)
         elif control == 'bake':
-            _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_fluid')
+            _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_liquid')
+        elif control == 'floating':
+            _draw_floating(box, context, entry)
+
+
+def _draw_water_sources(box, entry):
+    """Still Water's meshes: add more, or give one back (not the last)."""
+    from ..level2.still_water import water_sources
+    objs = water_sources(entry)
+    row = box.row(align=True)
+    row.label(text=f"Water meshes: {len(objs)}", icon="MOD_FLUIDSIM")
+    row.operator("aquasuite.still_water_add_source", text="Add Mesh to Water",
+                 icon="ADD").uuid = entry.uuid
+    for obj in objs:
+        row = box.row(align=True)
+        row.label(text=obj.name, icon="MESH_DATA")
+        sub = row.row(align=True)
+        sub.enabled = len(objs) > 1
+        op = sub.operator("aquasuite.water_source_remove", text="", icon="X")
+        op.uuid, op.name = entry.uuid, obj.name
 
 
 def _draw_obstacles(box, context):
@@ -382,6 +430,79 @@ def _draw_obstacles(box, context):
     sub = row.row(align=True)
     sub.enabled = n > 0
     sub.operator("aquasuite.obstacles_remove", text="", icon="REMOVE")
+
+
+def _draw_floating(box, context, entry):
+    """The scene's Floating Objects that are in this setup's tank."""
+    from ..core import floating
+    scene = context.scene
+    baking = bakes.is_baking(entry)
+    box.enabled = not baking
+    objs = floating.floaters_of(entry, scene)
+    row = box.row(align=True)
+    row.label(text=f"Floating objects: {len(objs)}", icon="MESH_UVSPHERE")
+    row.operator("aquasuite.floating_add", text="", icon="ADD")
+    sub = row.row(align=True)
+    sub.enabled = bool(floating.members(scene))
+    sub.operator("aquasuite.floating_remove", text="", icon="REMOVE")
+    for obj in objs:
+        s = obj.aqs_float
+        col = box.column(align=True)
+        row = col.row(align=True)
+        row.label(text=obj.name, icon="OBJECT_DATA")
+        row.prop(s, "material", text="")
+        row.prop(s, "pushes_water", text="", icon="MOD_FLUIDSIM", toggle=True)
+        if entry.show_advanced or obj == context.active_object:
+            row = col.row(align=True)
+            sub = row.row(align=True)
+            sub.enabled = s.material == "CUSTOM" and not s.use_mass
+            sub.prop(s, "density")
+            row.prop(s, "use_mass", text="", icon="FAKE_USER_ON" if s.use_mass else "FAKE_USER_OFF")
+            sub = row.row(align=True)
+            sub.enabled = s.use_mass
+            sub.prop(s, "mass")
+        found = floating.warnings(obj, entry)
+        note = "" if found else floating.buoyancy_note(obj)
+        if note:
+            sub = col.row()
+            sub.enabled = False
+            sub.label(text=note + (" · pushes water" if s.pushes_water else ""))
+        for why in found:
+            sub = col.row()
+            sub.alert = True
+            sub.label(text=why, icon="ERROR")
+    lost = floating.outside(scene)
+    if lost:
+        sub = box.row()
+        sub.alert = True
+        sub.label(text=f"{len(lost)} floating object(s) are in no liquid tank", icon="INFO")
+    if not objs:
+        return
+    pushing = any(o.aqs_float.pushes_water for o in objs)
+    if pushing:
+        col = box.column(align=True)
+        for i, line in enumerate(_wrap(
+                "Pushed water splashes and makes wakes, but its level doesn't "
+                "rise: the simulation removes the water inside the objects. "
+                "Bake Floaters bakes the water again with them — Blender is "
+                "busy until it finishes", 60)):
+            col.label(text=line, icon="INFO" if i == 0 else "BLANK1")
+    row = box.row(align=True)
+    sub = row.row(align=True)
+    sub.enabled = pushing or bakes.has_bake(entry)
+    keyed = floating.keyed(entry)
+    op = sub.operator("aquasuite.bake_floaters", icon="RENDER_ANIMATION",
+                      text="Bake Water + Floaters" if pushing else "Bake Floaters",
+                      depress=bool(keyed))
+    op.uuid = entry.uuid
+    sub = row.row(align=True)
+    sub.enabled = bool(keyed)
+    op = sub.operator("aquasuite.clear_floaters", text="", icon="X")
+    op.uuid = entry.uuid
+    if not pushing and not bakes.has_bake(entry):
+        sub = box.row()
+        sub.enabled = False
+        sub.label(text="Bake the liquid first")
 
 
 def _draw_regimes(box, entry):
@@ -425,7 +546,8 @@ def _draw_hose_liquid(box, entry, context):
     op.uuid = entry.uuid
     _draw_fluid_settings(box, entry)
     _draw_whitewater(box, entry)
-    _draw_bake(root, entry, "aquasuite.bake_fluid", "aquasuite.free_fluid")
+    _draw_bake(root, entry, "aquasuite.bake_fluid", "aquasuite.free_liquid")
+    _draw_floating(root.column(), context, entry)
 
 
 def _draw_pre_release(box, entry):

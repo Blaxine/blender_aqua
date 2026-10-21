@@ -4,7 +4,7 @@ schema_version = "1.0.0"
 # version (read at runtime by constants.ADDON_VERSION).
 
 id = "aquasuite"
-version = "0.20.0"
+version = "0.21.0"
 name = "AquaSuite — Water FX"
 tagline = "One-click layered water: ocean, rain, snow, liquid, hose"
 maintainer = "AquaSuite"
@@ -43,4 +43,5 @@ paths_exclude_pattern = [
   "/docs/THESAURUS.md",
   "/docs/RELEASE_CHECKLIST.md",
   "/docs/REQ003_REVIEW.md",
+  "/docs/FLOATERS_PROTOTYPE.md",
 ]

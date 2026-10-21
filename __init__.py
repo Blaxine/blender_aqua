@@ -13,7 +13,7 @@ import bpy
 from bpy.props import CollectionProperty, EnumProperty, PointerProperty
 
 from . import constants as C
-from .core import registry, handlers, quality, errors, bakes, obstacles
+from .core import registry, handlers, quality, errors, bakes, obstacles, floating
 from .core import presets, whitewater, render_layers
 from .core import lighting
 from .core import demo
@@ -24,7 +24,7 @@ from .level3 import hose
 from .ui import panel, beta
 
 
-_MODULES = (errors, bakes, obstacles, ocean, rain, rain_reactive, snow, still_water, rain_sim,
+_MODULES = (errors, bakes, obstacles, floating, ocean, rain, rain_reactive, snow, still_water, rain_sim,
             hose, simulated_ocean, presets, render_layers, lighting, demo, panel, beta)
 
 
@@ -76,6 +76,7 @@ def _register():
 
     handlers.register()
     obstacles.register()
+    floating.register()
     whitewater.register()
     presets.register()
 
@@ -83,7 +84,7 @@ def _register():
 def unregister():
     # Also valid after partial registration. Continue cleanup if one resource
     # fails so it does not strand every subsequently registered resource.
-    for module in (presets, whitewater, obstacles, handlers, errors, bakes):
+    for module in (presets, whitewater, floating, obstacles, handlers, errors, bakes):
         try:
             module.unregister()
         except Exception as exc:

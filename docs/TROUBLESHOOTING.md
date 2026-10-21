@@ -11,13 +11,33 @@
 - **“Ripples desync when I scrub backwards”** — Dynamic Paint waves are
   frame-order dependent. Use **Bake Ripples**, then scrub freely.
 
-- **“The boat sinks / floats too high”** — adjust that buoy's
-  **Buoyancy Offset** in the ocean assembly box; AquaSuite samples the
-  water surface — it doesn't know your boat's waterline.
+- **“The boat sinks / floats too high”** — pick the floater's
+  **Material** next to it in the ocean assembly box: AquaSuite then works
+  out how deep a closed mesh of that density sits. For a boat (hollow, or
+  an open mesh) choose *Manual Offset* and set **Buoyancy Offset** by hand.
 
 - **“Still Water does nothing”** — Level 2 and the hose's Simulate Liquid
   **must be baked**; use the red bake button in the assembly box. The
   file must be saved first (caches live next to the .blend).
+
+- **“Water from two meshes doesn't mix”** — each Still Water setup is its
+  own simulation. Keep one setup, select the other meshes and click **Add
+  Mesh to Water** in its box (delete the other setups first). Don't join
+  them (Ctrl+J): that changes your objects. A mesh named in an AQS-W021
+  warning already has its own Fluid modifier and was left out; remove that
+  modifier first.
+
+- **“Meshes I never turned into water show up in my bake”** — in setups
+  from older files, a domain took liquid from every Fluid flow inside it:
+  other setups' water meshes or emitters, and your own Fluid flows. Bake
+  again with the panel's Bake button: it gives the setup its own Flow
+  collection (`AQS_Flows_<id>`), and only the meshes in its *Water meshes*
+  list (and its own emitters) pour liquid. Blender's own Bake button in
+  the Physics tab skips that step for an old setup.
+
+- **“I added a water mesh but the liquid doesn't show it”** — the bake
+  was made before the change, and the box says *Water meshes changed —
+  Bake Again to include them*. Bake again.
 
 - **“The bake folder's path is too long for Windows” (AQS-E021)** — Windows
   limits a file's full path to 259 characters, and Blender's liquid solver
@@ -144,9 +164,59 @@
 - **Other force fields have no effect on the tank:** each tank only listens to
   force fields in its own collection, so its calibrated waves stay as set. Move
   a field into the tank's collection to make it push the water.
+- **Blender 4.5 crashed baking right after a free (scripts, render farms):**
+  Blender's own Free All (`fluid.free_all`) runs as a job, and a bake that
+  starts before it ends crashes Mantaflow ("name 'sm5' is not defined", then
+  an access violation). Headless it never ends first. AquaSuite's Free Bake
+  (`aquasuite.free_fluid`) frees on the spot, and Bake Again frees first, so
+  scripts should call those. Blender 5.2 is not affected.
+- **Console shows `Failed to add relation "Animation -> Rigid Body"` for an
+  ocean tank:** this is harmless. Stock Blender prints it for any keyframed
+  force field in a scene without a Rigid Body World. The trace under it
+  (Domain → tank collection → Wavemaker) is not a dependency cycle. Tanks
+  saved with 0.20.0 keyframed their wave maker; their next Bake (or any wave
+  edit) switches it to a driver with exactly the same strength, and the
+  message stops. New tanks never print it. It does not affect the bake, and
+  adding a Rigid Body World is not needed.
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.
+# Floating objects (0.21.0)
+
+- **Bake Floaters is greyed out:** bake the liquid first — floaters ride
+  the baked water. With Pushes Water on it bakes the water too, so it is
+  always available.
+- **An object isn't listed under Floating objects:** each liquid setup lists
+  the floating objects whose origin is inside its tank. "N floating object(s)
+  are in no liquid tank" means one is outside every tank: move it in.
+- **“The mesh has holes” / “has a parent”:** the volume of an open mesh is
+  undefined, so it can't float; close it (Fill, Solidify and apply) or use a
+  closed stand-in and parent the detailed mesh to it — but the floater itself
+  must have no parent. Unparent it with *Clear Parent and Keep Transform*.
+- **The object doesn't move when I drag it:** after Bake Floaters it is keyed.
+  Clear Floaters (×) puts it back and removes the keys; move it and bake again.
+  Removing it from Floating Objects does the same.
+- **A wood cube tips over onto a corner:** that is real. A cube between about
+  a fifth and four fifths of water's density (cork, wood, oak) is unstable
+  floating flat; ice and foam cubes stay level. Make it flatter (a plank or
+  raft stays level).
+- **Floaters in waves bob too much:** they respond to the full wave height with
+  their own natural bounce; in Rolling Waves a wooden box heaves about 1.3× the
+  wave. Heavier (deeper) objects and longer waves respond less.
+- **Pushes Water: the water level doesn't rise:** Mantaflow removes the water
+  inside an object instead of pushing it aside, so you get splashes and wakes
+  but not a higher level (it loses under 1% of the water). Raising the water
+  source slightly makes up for big objects.
+- **Pushes Water: Blender stops responding while baking:** the water and
+  floaters bake together in one blocking bake; Blender is busy until it
+  finishes and has no Cancel. The confirmation gives a rough time. For a long
+  shot, bake a short frame range first.
+- **“Only N cells across: too small to push water”:** an object needs about 5
+  simulation cells across to move water; raise Resolution or turn Pushes Water
+  off (it still floats).
+- **Free Bake or Delete moved my object:** floaters keyed on that water lose
+  their keys and go back where they were, with your own animation restored.
+
 # Beginner workflow (0.19.0 preview)
 
 - **Water is invisible or looks like glass:** add Water Lighting, then use

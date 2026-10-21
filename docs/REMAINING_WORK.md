@@ -1,9 +1,16 @@
-# AquaSuite 0.20.0 — remaining work
+# AquaSuite 0.21.0 — remaining work
 
-Updated: 2026-10-20. Scope: REQ-003 implementation and review against
-`c8939f5`, through `f48d83c`, plus the 0.19.1 fix pass on top of `54e172d`
-and the 0.20.0 wave maker on top of `193378b`.
+Updated: 2026-10-21. Scope: REQ-003 implementation and review against
+`c8939f5`, through `f48d83c`, plus the 0.19.1 fix pass on top of `54e172d`,
+the 0.20.0 wave maker on top of `193378b`, and 0.21.0 Floating Objects on top
+of `cc0b02e`.
 This is a preview, not a release acceptance record.
+
+**0.21.0** adds Floating Objects (F1 below): mass-based floaters on the
+Mantaflow liquids, Pushes Water as one coupled water + floaters bake, and a
+density for Plane Ocean floaters. Validated on **Blender 4.5.4 and 5.2.2 LTS**
+only: fast suite and the floater `--bake` tests; the full `--bake` suite was
+not re-run for 0.21.0.
 
 **0.20.0** replaces Ocean (Simulated)'s paddle with a force-field wave maker
 (S020, S023 below). It was validated on **Blender 4.5.4 and 5.2.2 LTS** only:
@@ -31,6 +38,47 @@ After the fix, both suites pass on both versions (numbers under "Run the full
 suite" below), and the 5.2 ocean bake numbers match 4.5's exactly. The panel's
 ocean controls resolve to valid properties on both versions, checked by
 script; they have not been looked at in the UI.
+
+## Floating Objects (0.21.0)
+
+- [ ] **F1 — Floating Objects: accept in the UI and in renders.** Built from
+  the prototype in [FLOATERS_PROTOTYPE.md](FLOATERS_PROTOTYPE.md) (physics,
+  numbers and design; §7 is what shipped). `core/floating.py` holds the
+  **AQS Floating Objects** collection (membership is the rule, as for Water
+  Obstacles; the two exclude each other), per-object Material / Density / Mass
+  Override / Pushes Water, Bake Floaters, Clear Floaters, and a Free Bake that
+  clears the floaters keyed on that water; Delete Assembly does too.
+  `level2/floaters.py` is the physics. Plane Ocean floaters gained a Material
+  that sets Buoyancy Offset (`floaters.buoy_offset`; sinking densities are not
+  offered, a sinking Custom density leaves the offset alone and the panel
+  says why).
+  **Automated (4.5.4 and 5.2.2):** `tests/test_floating.py` 38 fast checks
+  (collection, eligibility and mutual exclusion, materials and mass note,
+  Pushes Water effector following membership and surviving obstacle sync,
+  Outliner unlink restoring the user's action and transform, tank membership
+  and warnings, panel drawing, Clear/Delete restore, Plane Ocean density) and
+  11 bake checks (one-way: plank ~60% deep, steel on the floor, re-bake starts
+  from the user's pose, Clear; coupled: one bake, water volume −0.34%, crate
+  floats, fractions off, Delete restores). `tests/test_floaters.py` covers the
+  physics (16 fast checks plus the baked Still Water float/sink test).
+  **Not done:** looking at the panel and a coupled bake in the Blender UI (the
+  coupled bake is blocking: Blender is unresponsive until it finishes. Esc
+  is not expected to cancel it, since a blocking bake processes no window
+  events, but that is untested; the panel and confirmation say Blender is
+  busy and promise no Cancel); renders; Blender 5.1.
+- [ ] **F2 — Floaters over-respond in waves.** In Rolling Waves a wooden box
+  heaves 1.28–1.31× the local wave and pitches 1.35–1.53× the slope. 0.21.0
+  adds the depth decay of wave pressure for Ocean (Simulated) floaters
+  (Smith effect, k from the tank's dispersion relation, measured from the
+  still level): heave/wave 1.22–1.28 on the same bake, pitch barely changed.
+  Most of the excess is the box's own resonance (natural period ~1.2 s in a
+  2.4 s wave), which needs wave-radiation damping or a diffraction correction.
+- [ ] **F3 — Pushes Water re-bake on 4.5 depends on the Free Bake fix.** Bake
+  Water + Floaters frees an existing liquid bake first. It calls
+  `still_water.free_bake` when present (the separate Free Bake → Bake crash
+  fix) and otherwise `aquasuite.free_fluid`, which crashes headless Blender
+  4.5 when a bake follows. A first bake (nothing to free) works everywhere.
+  Re-test a coupled re-bake on 4.5 once both are merged.
 
 ## Confirmed review finding
 
@@ -220,6 +268,29 @@ script; they have not been looked at in the UI.
      (`core/whitewater.py`, applied at every bake): a 720-frame Storm baked
      in 499 s with no crash, the particle cache levels off at 26–29 MB/frame,
      and the liquid volume changed +0.15% (peak +0.32%).
+  13. *Console warning at tank creation is not a dependency cycle.* Creating
+     a tank prints `Failed to add relation "Animation -> Rigid Body"` with a
+     trace Domain → tank collection → Wavemaker. That trace is the path
+     Blender followed to reach the wave maker, not a loop; no "Dependency
+     cycle detected" line appears. Blender adds this relation for every
+     keyframed force field (`build_animdata_force`), and it fails when the
+     scene has no rigid body world. Repro on stock Blender 4.5.4 and 5.2.2
+     with no add-on: an empty with a Wind field and one keyframe on its
+     strength prints it once; with no keyframe, nothing. Moving the wave
+     maker into a child collection without the domain still prints it, so
+     the effector collection is not the cause. It reappears on each
+     relations rebuild and does not affect the bake. **Fix: the strength is
+     a driver**, not an action. The driver has the expression `frame`, a
+     simple expression that runs without Python auto-run. Its curve is the
+     same constant 0 key plus sine modifier, so the strength is identical:
+     60 samples, frames 1–719 including subframes, on 4.5 and 5.2. Drivers
+     are not an animation component, so creating a tank prints nothing.
+     The domain's fluid step waits only for the wave maker's transform, with
+     either the action or the driver, so the evaluation order is unchanged.
+     A tank saved with 0.20.0 opens unchanged, still keyframed; `apply_period`
+     (run by every Bake and wave edit) swaps its action for the driver
+     (`_strength_curve`; fast test `test_020_keyframed_tank`). Re-baked
+     heights are under S023.
 - [ ] **S021 — Apply review-supported preset tuning.** Update preset values only
   once the visual review establishes the needed changes. Recheck all affected
   presets after tuning.
@@ -261,6 +332,10 @@ script; they have not been looked at in the UI.
   | Calm (res 400, 20×4×2.5 m) | 0.12 m | 0.116 m (0.129, 0.106, 0.102, 0.130, 0.115) | 0.105 m | 0.078 m | 0.119 / 0.084 m | 104.26 → 104.82 m³ (+0.54%) | 1219 / 1112 s |
   | Rolling Waves (res 160) | 0.45 m | 0.400 m (0.372, 0.405, 0.400, 0.422, 0.398) | 0.280 m | 0.356 m | 0.521 / 0.468 m | 322.30 → 323.66 m³ (+0.42%) | 291 / 249 s |
   | Storm Surf (res 160) | 0.90 m | 0.937 m (0.891, 0.908, 0.913, 0.951, 1.020) | 1.801 m | 1.683 m | 1.093 / 1.561 m | 322.30 → 322.78 m³ (+0.15%) | 504 / 466 s |
+
+  Re-baked after the wave maker's strength became a driver (S020 point 13):
+  every height and volume above is identical on 4.5 and 5.2 (70/70 checks
+  each); bake times 1367 / 315 / 542 s on 4.5 and 1161 / 272 / 477 s on 5.2.
 
   The far wall reflects almost everything, so after about 19 s the tank holds
   a partial standing wave whose nodes drift. Rolling's far half keeps 0.6–0.7 ×
@@ -368,6 +443,15 @@ script; they have not been looked at in the UI.
   the add-on disables cleanly. Fast suite on the final tree: 483 passed,
   0 failed, 9 skipped across 4.5.4 and 5.2.2 in 67 s (skips: the four bake-only
   files on each, plus 4.5's restricted-registration check).
+  **0.21.0 (2026-10-21):** `dist/aquasuite-0.21.0.zip` built with Blender
+  5.2.2's extension builder; `extension validate` passes; 43 files (41 plus
+  `core/floating.py` and `level2/floaters.py`), each byte-identical to the
+  source, with `docs/FLOATERS_PROTOTYPE.md` excluded like the other plans.
+  Fresh install into an isolated 5.2.2 profile (`extension install-file`)
+  loads v0.21.0; a Still Water tank at resolution 32 bakes, Bake Floaters keys
+  a crate, Clear Floaters puts it back, a Plane Ocean floater attached as Wood
+  gets Buoyancy Offset −0.05 m, and the add-on disables and re-enables
+  cleanly. Not installed in 4.5 or 5.1; no upgrade-over-0.20.0 check.
 - [ ] Finish release notes and the remaining release checklist before publishing.
   Publishing is a later action; this document does not authorize an upload.
 

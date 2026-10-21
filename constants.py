@@ -41,6 +41,26 @@ SRC_PROP = "aqs_source_of"                # marks a USER object as a Still-Water
 
 ROOT_COLLECTION = "AQS_Assemblies"
 
+# --- Floating objects: what they are made of (kg/m^3; water is 1000) ---------
+FLOAT_MATERIALS = (
+    ("FOAM", "Foam", 100.0),
+    ("CORK", "Cork", 240.0),
+    ("WOOD", "Wood", 600.0),
+    ("OAK", "Oak", 750.0),
+    ("ICE", "Ice", 917.0),
+    ("PLASTIC", "Plastic", 950.0),
+    ("RUBBER", "Rubber", 1100.0),
+    ("CONCRETE", "Concrete", 2400.0),
+    ("STEEL", "Steel", 7800.0),
+)
+
+
+def float_material_items(floating_only=False):
+    items = [(key, label, f"{rho:.0f} kg/m³ — " + ("floats" if rho < 1000.0 else "sinks"))
+             for key, label, rho in FLOAT_MATERIALS if rho < 1000.0 or not floating_only]
+    items.append(("CUSTOM", "Custom", "Type the density"))
+    return items
+
 # Public issue tracker: bug reports, roadmap, support.
 SUPPORT_URL = "https://github.com/Blaxine/blender_aqua/issues"
 

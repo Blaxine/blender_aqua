@@ -19,10 +19,28 @@ from . import presets
 
 
 class AQS_PoolSourceEntry(bpy.types.PropertyGroup):
-    """Restore record for a user mesh serving as Rain-Sim pool water."""
+    """Restore record for a user mesh serving as Rain-Sim pool water, or as
+    one of a Still Water setup's extra water meshes."""
     obj: PointerProperty(type=bpy.types.Object)
     hide_render: BoolProperty(default=False)
     display_type: StringProperty(default="TEXTURED")
+
+
+@errors.guard_update("AquaSuite couldn't set the floater's waterline")
+def _buoy_material_update(self, context):
+    """A material or density sets the Buoyancy Offset: the object's origin
+    sits where a closed mesh that dense floats.  Sinking densities and open
+    meshes leave the offset alone (the panel says why)."""
+    from ..level2 import floaters
+    if self.material == "MANUAL" or self.obj is None:
+        return
+    rho = floaters.DENSITY_PRESETS.get(self.material)
+    if rho is not None and abs(self.density - rho) > 1e-6:
+        self.density = rho  # this update runs again and sets the offset
+        return
+    if self.density >= floaters.RHO_WATER or not floaters.is_closed(self.obj):
+        return
+    self.offset = floaters.buoy_offset(self.obj, self.density)
 
 
 class AQS_BuoyEntry(bpy.types.PropertyGroup):
@@ -39,6 +57,16 @@ class AQS_BuoyEntry(bpy.types.PropertyGroup):
         name="Tilt Amount", default=1.0, min=0.0, soft_max=3.0,
         description="Pitch/roll response to the local wave gradient")
     added_constraints: StringProperty(default="")  # ';'-joined names, restore record
+    material: EnumProperty(
+        name="Material", default="MANUAL", update=_buoy_material_update,
+        items=[("MANUAL", "Manual Offset", "Set Buoyancy Offset by hand")]
+        + C.float_material_items(floating_only=True),
+        description="What the floater is made of: sets how deep it sits "
+                    "(Buoyancy Offset)")
+    density: FloatProperty(
+        name="Density", default=600.0, min=1.0, soft_max=2000.0, precision=0,
+        update=_buoy_material_update,
+        description="kg/m³. Water is 1000: a Plane Ocean floater must be lighter")
 
 
 @errors.guard_update("AquaSuite couldn't apply that change")
@@ -242,6 +270,11 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     source: PointerProperty(type=bpy.types.Object)
     src_hide_render: BoolProperty(default=False)
     src_display_type: StringProperty(default="TEXTURED")
+    # Water meshes added or removed since the last bake (Still Water's
+    # extra meshes live in pool_sources).
+    sources_changed: BoolProperty(default=False)
+    # The domain's Flow collection: only these objects pour liquid into it.
+    flow_collection: PointerProperty(type=bpy.types.Collection)
     # Hose
     regime: EnumProperty(items=C.REGIME_ITEMS, default=C.REGIME_NORMAL)
     pressure: FloatProperty(

@@ -184,6 +184,35 @@ def _paddle_curve(paddle, entry):
     return _curve(paddle, entry, 'location', 0)
 
 
+def _strength_curve(field_obj, entry):
+    """The driver F-curve on field.strength, created on first use.
+
+    A driver, not an action: Blender links every keyframed force field to
+    the rigid body world and, when the scene has none, prints 'Failed to add
+    relation "Animation -> Rigid Body"' at every relations rebuild.  The
+    driver feeds the frame to the curve (a simple expression, so it runs
+    without Python auto-run), and the curve is the one 0.20.0 keyframed: a
+    constant 0 key plus the sine modifier, so the strength is unchanged.
+    A 0.20.0 tank's action is replaced here, at its next bake or edit."""
+    animation = field_obj.animation_data
+    curve = next((d for d in animation.drivers if d.data_path == 'field.strength'),
+                 None) if animation else None
+    if curve is None:
+        action = animation.action if animation else None
+        if action is not None and naming.owned_by(action, entry.uuid):
+            animation.action = None
+            if not action.users:
+                bpy.data.actions.remove(action)
+        curve = field_obj.driver_add('field.strength')
+        for modifier in list(curve.modifiers):  # driver_add adds a Generator
+            curve.modifiers.remove(modifier)
+        curve.keyframe_points.insert(1, 0)
+    driver = curve.driver
+    driver.type = 'SCRIPTED'
+    driver.expression = 'frame'
+    return curve
+
+
 def _sine(curve, amplitude, period, fps, start):
     modifier = next((m for m in curve.modifiers if m.type == 'FNGENERATOR'), None)
     if modifier is None:
@@ -264,7 +293,7 @@ def _apply_wavemaker(entry, scene, ds, source, field_obj):
     field.flow = 0
     field.noise = 0
     field.strength = 0
-    curve = _curve(field_obj, entry, 'field.strength')
+    curve = _strength_curve(field_obj, entry)
     for key in curve.keyframe_points:
         key.co.y = 0
         key.interpolation = 'CONSTANT'
@@ -386,6 +415,7 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
         entry['tank_origin'] = list(scene.cursor.location)
         presets.apply(context, entry, self.preset)
         sw.add_effectors(scene, dom, uid)
+        sw.sync_flows(entry)
         context.view_layer.objects.active = dom
         self.report({'INFO'}, f'Wave tank created — save and bake; the bake covers {CACHE_SECONDS} s '
                     f'({ds.cache_frame_end - ds.cache_frame_start + 1} frames)'
