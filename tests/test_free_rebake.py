@@ -58,9 +58,10 @@ def test_setup():
     lib.check("setup created", lib.entry(U["u"]) is not None)
 
 
-def test_nothing_writes_use_fractions():
+def test_use_fractions_written_only_before_a_free():
     """Writing use_fractions after a bake broke the next 4.5 bake when the
-    bake was freed with Free All."""
+    bake was freed with Free All.  The one write (Bake Floaters turns it
+    off) must come right before the synchronous free."""
     hits = []
     for root, dirs, files in os.walk(lib.REPO):
         dirs[:] = [d for d in dirs if d not in ("tests", "public_repo", "__pycache__")
@@ -68,9 +69,12 @@ def test_nothing_writes_use_fractions():
         for f in files:
             if f.endswith(".py"):
                 with open(os.path.join(root, f), encoding="utf-8") as fh:
-                    if "use_fractions" in fh.read():
-                        hits.append(f)
-    lib.check("the add-on never writes use_fractions", not hits, str(hits))
+                    lines = fh.read().splitlines()
+                for i, line in enumerate(lines):
+                    if "use_fractions =" in line and not any(
+                            "_free_liquid(" in later for later in lines[i + 1:i + 3]):
+                        hits.append(f"{f}:{i + 1}")
+    lib.check("use_fractions is only written right before a free", not hits, str(hits))
 
 
 def test_free_without_bake_is_harmless():

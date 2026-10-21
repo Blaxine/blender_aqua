@@ -386,8 +386,11 @@ def bake_coupled(context, entry, report):
         sw.refresh_obstacles(scene, entry, report=report)
     except Exception as exc:
         print(f"[AquaSuite] obstacle refresh warning: {exc}")
-    # Moving obstacles lose water with fractions on (-11% measured).
-    ds.use_fractions = False
+    # Moving obstacles lose water with fractions on (-11% measured).  Only
+    # ever written right before the synchronous free below: written after
+    # a bake and freed with Free All, it broke the next 4.5 bake.
+    if ds.use_fractions:
+        ds.use_fractions = False
     _free_liquid(context, entry, ds)
     first, last = ds.cache_frame_start, ds.cache_frame_end
     frame = scene.frame_current

@@ -556,18 +556,20 @@ def test_bake_own_flows_only():
               r2["Mid"] > 20 and r2["Left"] == r2["Right"] == r2["UserFlow"] == 0
               and _flows(u2) == ["Mid"], detail)
 
-    extra = _cube("Extra", (0, -0.3, 1), (0.1, 0.1, 0.1))
+    extra = _cube("Extra", (0, -0.4, 1), half)
     _select([extra], extra)
     bpy.ops.aquasuite.still_water_add_source(uuid=u1)
     lib.check("adding a mesh after a bake asks for a re-bake",
               lib.entry(u1).sources_changed
               and any("Bake Again" in item[1] for item in _draw(lib.entry(u1))
                       if item[0] == "label"))
-    # Not Free Bake: on Blender 4.5 headless, Free followed by a bake or an
-    # evaluation crashes Mantaflow.  What Bake Again bakes isn't checked:
-    # on an already-baked domain Bake All starts from the old solver state.
     bpy.ops.aquasuite.bake_fluid(uuid=u1)
-    lib.check("Bake Again clears the note", not lib.entry(u1).sources_changed)
+    lib.scene().frame_set(3)
+    pts = _liquid_points(sw.find_domain_object(lib.entry(u1)))
+    n = {o.name: _near(pts, o, 0.15) for o in (left, right, extra)}
+    lib.check("Bake Again clears the note and bakes the added mesh too",
+              not lib.entry(u1).sources_changed
+              and n["Left"] > 20 and n["Right"] > 20 and n["Extra"] > 0, str(n))
 
 
 lib.main(globals())
