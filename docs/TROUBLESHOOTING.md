@@ -164,6 +164,12 @@
 - **Other force fields have no effect on the tank:** each tank only listens to
   force fields in its own collection, so its calibrated waves stay as set. Move
   a field into the tank's collection to make it push the water.
+- **Blender 4.5 crashed baking right after a free (scripts, render farms):**
+  Blender's own Free All (`fluid.free_all`) runs as a job, and a bake that
+  starts before it ends crashes Mantaflow ("name 'sm5' is not defined", then
+  an access violation). Headless it never ends first. AquaSuite's Free Bake
+  (`aquasuite.free_fluid`) frees on the spot, and Bake Again frees first, so
+  scripts should call those. Blender 5.2 is not affected.
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.

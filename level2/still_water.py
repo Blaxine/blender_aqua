@@ -562,6 +562,7 @@ def find_domain_object(entry):
 
 import contextlib
 import os
+import shutil
 import sys
 
 MEMORY_CONFIRM_GB = 2.0
@@ -605,6 +606,58 @@ def cache_path_too_long(ds):
         return 0
     n = len(longest_cache_path(ds))
     return n if n >= WINDOWS_PATH_LIMIT else 0
+
+
+# What Blender's Free All deletes inside the cache folder; anything else
+# there (the user's own files) is left alone.
+_CACHE_SUBDIRS = ("config", "data", "noise", "mesh", "particles", "guiding")
+_CACHE_KINDS = ("data", "noise", "mesh", "particles", "guide")
+
+
+def free_bake(entry, ds):
+    """Free the bake now and leave the domain ready for a clean bake.
+    Returns the cache folders that could not be deleted (files in use).
+
+    Never fluid.free_all: it runs as a job, and on Blender 4.5 a bake (or,
+    headless, any evaluation) that starts before the job ends crashes in
+    MANTA::initLiquid after "name 'sm5' is not defined" (5.2 is fine).
+    Pointing the domain at another folder resets the solver at once; Bake
+    All on a domain that was not reset starts from the old solver state
+    and bakes a different result.  The domain then goes back to its own
+    folder (//aquasuite_cache/<id>, which Delete and the path-length check
+    rely on), emptied."""
+    folder = ds.cache_directory
+    # Unsaved, "//" would point at Blender's working folder: delete nothing.
+    unsaved = folder.startswith("//") and not bpy.data.filepath
+    root = None if unsaved else bpy.path.abspath(folder)
+    base = folder.rstrip("/\\") + "_free"
+    detour, n = base, 1
+    while os.path.exists(bpy.path.abspath(detour)):
+        detour, n = f"{base}{n}", n + 1
+    failed = []
+    ds.cache_directory = detour  # nothing is written there
+    try:
+        for name in _CACHE_SUBDIRS if root else ():
+            path = os.path.join(root, name)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+                if os.path.isdir(path):
+                    failed.append(path)
+    finally:
+        ds.cache_directory = folder
+    # Without the pause reset the next bake resumes at the last frame and
+    # writes only that frame.
+    for kind in _CACHE_KINDS:
+        _safe(ds, f"cache_frame_pause_{kind}", 0)
+        _safe(ds, f"has_cache_baked_{kind}", False)
+    from ..core import delete
+    own = delete.cache_dir(entry.uuid)
+    if own and root and os.path.normcase(os.path.abspath(own)) == os.path.normcase(os.path.abspath(root)):
+        try:
+            os.rmdir(root)  # only when empty
+        except OSError:
+            pass
+    return failed
 
 
 def estimated_memory_gb(entry):
@@ -758,6 +811,12 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
                             "AQS-W022: " + C.MSG["W022"].format(gb=gb))
         except Exception:
             pass
+        ds = dmod.domain_settings if dmod is not None else None
+        if ds is not None and ds.has_cache_baked_any:
+            # Bake Again: free first, so the bake starts from a reset solver.
+            failed = free_bake(entry, ds)
+            if failed:
+                self.report({"WARNING"}, _in_use_message(failed))
         try:
             with _fluid_op_override(context, dom):
                 # INVOKE_DEFAULT runs the bake as a background job: the UI
@@ -796,21 +855,25 @@ class AQS_OT_free_fluid(bpy.types.Operator):
             self.report({"ERROR"},
                         "No fluid domain found in this assembly.")
             return {"CANCELLED"}
-        was_hidden = dom.hide_get() if hasattr(dom, "hide_get") else False
-        if was_hidden:
-            dom.hide_set(False)
+        ds = next(m for m in dom.modifiers if m.type == "FLUID").domain_settings
+        if ds.is_cache_baking_any:
+            self.report({"WARNING"}, "Cancel the bake first, then Free Bake")
+            return {"CANCELLED"}
         try:
-            with _fluid_op_override(context, dom):
-                bpy.ops.fluid.free_all()
+            failed = free_bake(entry, ds)
             entry.sources_changed = False
         except Exception as exc:
             from ..core import errors
             return errors.fail(self, "AquaSuite couldn't free the bake", exc,
-                               mode=entry.mode if entry else "", uuid=self.uuid)
-        finally:
-            if was_hidden:
-                dom.hide_set(True)
+                               mode=entry.mode, uuid=self.uuid)
+        if failed:
+            self.report({"WARNING"}, _in_use_message(failed))
         return {"FINISHED"}
+
+
+def _in_use_message(failed):
+    return (f"{len(failed)} cache folder(s) could not be fully deleted — "
+            f"a file is in use ({failed[0]})")
 
 
 CLASSES = (AQS_OT_still_water_create, AQS_OT_still_water_add_source,
