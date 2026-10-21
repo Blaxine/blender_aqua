@@ -20,6 +20,25 @@
   **must be baked**; use the red bake button in the assembly box. The
   file must be saved first (caches live next to the .blend).
 
+- **“Water from two meshes doesn't mix”** — each Still Water setup is its
+  own simulation. Keep one setup, select the other meshes and click **Add
+  Mesh to Water** in its box (delete the other setups first). Don't join
+  them (Ctrl+J): that changes your objects. A mesh named in an AQS-W021
+  warning already has its own Fluid modifier and was left out; remove that
+  modifier first.
+
+- **“Meshes I never turned into water show up in my bake”** — in setups
+  from older files, a domain took liquid from every Fluid flow inside it:
+  other setups' water meshes or emitters, and your own Fluid flows. Bake
+  again with the panel's Bake button: it gives the setup its own Flow
+  collection (`AQS_Flows_<id>`), and only the meshes in its *Water meshes*
+  list (and its own emitters) pour liquid. Blender's own Bake button in
+  the Physics tab skips that step for an old setup.
+
+- **“I added a water mesh but the liquid doesn't show it”** — the bake
+  was made before the change, and the box says *Water meshes changed —
+  Bake Again to include them*. Bake again.
+
 - **“The bake folder's path is too long for Windows” (AQS-E021)** — Windows
   limits a file's full path to 259 characters, and Blender's liquid solver
   silently skips any cache file past it: the bake "finishes" but the liquid

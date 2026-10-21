@@ -19,7 +19,8 @@ from . import presets
 
 
 class AQS_PoolSourceEntry(bpy.types.PropertyGroup):
-    """Restore record for a user mesh serving as Rain-Sim pool water."""
+    """Restore record for a user mesh serving as Rain-Sim pool water, or as
+    one of a Still Water setup's extra water meshes."""
     obj: PointerProperty(type=bpy.types.Object)
     hide_render: BoolProperty(default=False)
     display_type: StringProperty(default="TEXTURED")
@@ -269,6 +270,11 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
     source: PointerProperty(type=bpy.types.Object)
     src_hide_render: BoolProperty(default=False)
     src_display_type: StringProperty(default="TEXTURED")
+    # Water meshes added or removed since the last bake (Still Water's
+    # extra meshes live in pool_sources).
+    sources_changed: BoolProperty(default=False)
+    # The domain's Flow collection: only these objects pour liquid into it.
+    flow_collection: PointerProperty(type=bpy.types.Collection)
     # Hose
     regime: EnumProperty(items=C.REGIME_ITEMS, default=C.REGIME_NORMAL)
     pressure: FloatProperty(

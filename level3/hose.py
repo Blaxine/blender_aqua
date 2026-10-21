@@ -503,6 +503,7 @@ class AQS_OT_hose_create(bpy.types.Operator):
             whitewater.initialize(entry)
             entry.ww_managed = True
             entry.preset_choice = self.preset
+        sw.sync_flows(entry)
 
         context.view_layer.objects.active = nozzle
         self.report({"INFO"},

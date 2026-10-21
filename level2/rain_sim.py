@@ -758,6 +758,7 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
             sw.add_effectors(scene, dom, uid, report=self.report)
         except Exception as exc:
             print(f"[AquaSuite] effector setup warning: {exc}")
+        sw.sync_flows(entry)
 
         try:
             context.view_layer.objects.active = emitter
@@ -824,6 +825,8 @@ class AQS_OT_rain_sim_add_pool(bpy.types.Operator):
 
         fit_domain(context, entry)
         apply_quality(context, entry)
+        sw.sync_flows(entry)
+        sw.mark_sources_changed(entry)
         self.report({"INFO"},
                     f"'{src.name}' is now pool water — re-bake to see rain "
                     "splash into it")
@@ -880,6 +883,7 @@ class AQS_OT_rain_sim_rebuild_emitter(bpy.types.Operator):
                 step(context, entry)
             except Exception as exc:
                 print(f"[AquaSuite] rebuild step {step.__name__}: {exc}")
+        sw.sync_flows(entry)
         try:
             context.view_layer.objects.active = emitter
             emitter.select_set(True)

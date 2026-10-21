@@ -386,6 +386,7 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
         entry['tank_origin'] = list(scene.cursor.location)
         presets.apply(context, entry, self.preset)
         sw.add_effectors(scene, dom, uid)
+        sw.sync_flows(entry)
         context.view_layer.objects.active = dom
         self.report({'INFO'}, f'Wave tank created — save and bake; the bake covers {CACHE_SECONDS} s '
                     f'({ds.cache_frame_end - ds.cache_frame_start + 1} frames)'

@@ -378,6 +378,7 @@ def bake_coupled(context, entry, report):
         floaters.clear(obj)
     sync(scene)
     # What Bake Liquid does before it bakes.
+    sw.sync_flows(entry)
     whitewater.apply(entry)
     if entry.mode == C.MODE_SIMOCEAN and not simulated_ocean.is_legacy(entry):
         simulated_ocean.apply_period(entry)

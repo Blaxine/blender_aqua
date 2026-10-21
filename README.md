@@ -72,8 +72,8 @@ Memory information and Set Up Render Layers appear while any box is Advanced.
 | Rain | **Create → Rain** | Press Play |
 | Rain with impact ripples | **Create → Reactive Rain** | Press Play; use **Bake Ripples** before scrubbing the timeline |
 | Falling snow (7 flake shapes) | **Create → Snow** | Press Play |
-| Turn my mesh into liquid | Select the mesh → **Still Water** | Click the red **Bake (required)** button — Level 2 is Mantaflow FLIP and must bake |
-| Real simulated rain splashing into water | **Create → Rain Sim** | Pick a preset; adjust Drop Amount, Speed and Angle. Select a mesh and click **＋** next to *Pool meshes*, then save and Bake. Advanced holds Draft, resolution and other settings |
+| Turn my mesh into liquid | Select the mesh → **Still Water** | Click the red **Bake (required)** button — Level 2 is Mantaflow FLIP and must bake. To pour more meshes into the same simulation, select them and click **Add Mesh to Water** in its box |
+| Real simulated rain splashing into water | **Create → Rain Sim** | Pick a preset; adjust Drop Amount, Speed and Angle. Select a mesh and click **＋** next to *Pool meshes*, then save and Bake (Advanced lists the pools, with an **X** to give one back). Advanced holds Draft, resolution and other settings |
 | Crates, ice or a raft floating in simulated water | Add the objects to **Floating Objects** in the Still Water, Rain Sim or Ocean (Simulated) box and pick a Material | Bake the liquid, then **Bake Floaters**. Turn on **Pushes Water** for splashes and wakes |
 | An aimable hose / jet | **Create → Water Hose** | Press Play — rotate or keyframe the nozzle to aim; pick a regime (**Normal / Mist / Spray / Blast**), all real-time; set **Water Color**. Add floors and walls to **Water Obstacles** so the water hits them |
 
@@ -88,8 +88,8 @@ Memory information and Set Up Render Layers appear while any box is Advanced.
   Delete asks whether to remove those too (off by default — undo can't
   bring files back).
 - **Your data is never converted.** *Still Water* hides your source
-  mesh and renders liquid in its place; delete the assembly and your
-  object comes back untouched.
+  meshes and renders liquid in their place; delete the assembly and your
+  objects come back untouched.
 - **One place for obstacles.** Click **＋** next to *Water obstacles* in
   any Still Water, Water Hose or Rain Sim box to add the selected objects
   to the scene's **AQS Water Obstacles** collection: everything in it
@@ -181,6 +181,35 @@ wave maker (Bake Again afterwards).
 Existing setups initially show **Custom**. Their whitewater flags are read from
 the domain without applying a preset or modifying its solver/render setup. Edit
 Whitewater or explicitly apply a preset to adopt the new controls.
+
+## Still Water from several meshes
+
+**Still Water** turns the active mesh into water. To pour more meshes into
+the same simulation — a glass and a jug, or two tanks whose water should
+meet — select them and click **Add Mesh to Water** in the setup's box. There's
+no need to join them (Ctrl+J would change your objects), and separate Still
+Water setups never share water.
+
+The box lists the **Water meshes**; only the meshes in that list become
+water. Adding grows the domain to hold them (it never shrinks a domain you
+made bigger). Meshes that can't be added are named in a warning: meshes
+AquaSuite made, meshes that are already water, and meshes with their own Fluid
+modifier (AQS-W021). Open meshes are added, with the usual leak warning
+(AQS-W012). The **X** next to a mesh gives it back exactly as it was: its
+modifiers, render visibility, display type and collections. A domain still at
+its automatic size is fitted to the meshes left; one you moved or resized is
+kept as it is. The last mesh has no X: Delete removes the whole setup. After
+a bake, adding or removing a mesh shows *Water meshes changed — Bake Again
+to include them*. Delete and undo restore every mesh.
+
+Each liquid setup (Still Water, Rain Sim, the hose's Simulate Liquid, Ocean
+(Simulated)) keeps its own Flow collection, `AQS_Flows_<id>`, inside its
+assembly collection, and its domain takes liquid only from that collection.
+The listed water meshes therefore also appear there in the Outliner. In
+earlier versions a domain took liquid from every Fluid flow in the scene that
+lay inside it: another setup's water meshes, emitters, or your own Fluid flows. Setups
+from older files get their Flow collection the next time you bake them with
+the panel's Bake button.
 
 ## Baking
 

@@ -247,6 +247,11 @@ def _draw_bake(box, entry, op_bake, op_free=None, mandatory=True):
     op = sub.operator(op_bake, icon="RENDER_ANIMATION", text=text,
                       depress=baked)
     op.uuid = entry.uuid
+    if baked and entry.sources_changed:
+        warn = box.row()
+        warn.alert = True
+        warn.label(text="Water meshes changed — Bake Again to include them",
+                   icon="ERROR")
     if op_free:
         sub = row.row(align=True)
         sub.alert = True
@@ -362,7 +367,13 @@ def _draw_spec(box, context, entry):
             row.operator('aquasuite.rain_sim_add_pool', text='', icon='ADD').uuid = entry.uuid
             if entry.show_advanced:
                 for rec in entry.pool_sources:
-                    box.label(text=rec.obj.name if rec.obj else '<missing>')
+                    row = box.row(align=True)
+                    row.label(text=rec.obj.name if rec.obj else '<missing>')
+                    if rec.obj:
+                        op = row.operator('aquasuite.water_source_remove', text='', icon='X')
+                        op.uuid, op.name = entry.uuid, rec.obj.name
+        elif control == 'water_sources':
+            _draw_water_sources(box, entry)
         elif control == 'rain_tools':
             for op_id, label in (('rain_sim_rebuild_emitter', 'Rebuild Emitter'), ('rain_sim_optimize', 'Optimize Visible Rain'), ('rain_sim_check', 'Check Pool Link'), ('rain_sim_fit_domain', 'Fit Domain')):
                 box.operator('aquasuite.' + op_id, text=label).uuid = entry.uuid
@@ -390,6 +401,23 @@ def _draw_spec(box, context, entry):
             _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_liquid')
         elif control == 'floating':
             _draw_floating(box, context, entry)
+
+
+def _draw_water_sources(box, entry):
+    """Still Water's meshes: add more, or give one back (not the last)."""
+    from ..level2.still_water import water_sources
+    objs = water_sources(entry)
+    row = box.row(align=True)
+    row.label(text=f"Water meshes: {len(objs)}", icon="MOD_FLUIDSIM")
+    row.operator("aquasuite.still_water_add_source", text="Add Mesh to Water",
+                 icon="ADD").uuid = entry.uuid
+    for obj in objs:
+        row = box.row(align=True)
+        row.label(text=obj.name, icon="MESH_DATA")
+        sub = row.row(align=True)
+        sub.enabled = len(objs) > 1
+        op = sub.operator("aquasuite.water_source_remove", text="", icon="X")
+        op.uuid, op.name = entry.uuid, obj.name
 
 
 def _draw_obstacles(box, context):

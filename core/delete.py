@@ -60,6 +60,12 @@ def _restore_one_source(src, uuid, hide_render, display_type):
     for prop in (C.SRC_PROP, C.OWNER_PROP):
         if str(src.get(prop, "")).endswith(uuid):
             del src[prop]
+    # Left only in this setup's pool/flow collections (the user unlinked it
+    # from their own): those are about to go, so keep it in the scene.
+    from . import naming
+    cols = src.users_collection
+    if cols and all(naming.owned_by(c, uuid) for c in cols):
+        bpy.context.scene.collection.objects.link(src)
 
 
 def _restore_source(entry):
