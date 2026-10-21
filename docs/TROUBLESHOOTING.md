@@ -11,9 +11,10 @@
 - **“Ripples desync when I scrub backwards”** — Dynamic Paint waves are
   frame-order dependent. Use **Bake Ripples**, then scrub freely.
 
-- **“The boat sinks / floats too high”** — adjust that buoy's
-  **Buoyancy Offset** in the ocean assembly box; AquaSuite samples the
-  water surface — it doesn't know your boat's waterline.
+- **“The boat sinks / floats too high”** — pick the floater's
+  **Material** next to it in the ocean assembly box: AquaSuite then works
+  out how deep a closed mesh of that density sits. For a boat (hollow, or
+  an open mesh) choose *Manual Offset* and set **Buoyancy Offset** by hand.
 
 - **“Still Water does nothing”** — Level 2 and the hose's Simulate Liquid
   **must be baked**; use the red bake button in the assembly box. The
@@ -147,6 +148,42 @@
 - **Old scene looks different:** compare a saved copy before adopting controls.
   Loading alone only initialises metadata; it does not apply presets, add
   whitewater render objects, or change solver flags.
+# Floating objects (0.21.0)
+
+- **Bake Floaters is greyed out:** bake the liquid first — floaters ride
+  the baked water. With Pushes Water on it bakes the water too, so it is
+  always available.
+- **An object isn't listed under Floating objects:** each liquid setup lists
+  the floating objects whose origin is inside its tank. "N floating object(s)
+  are in no liquid tank" means one is outside every tank: move it in.
+- **“The mesh has holes” / “has a parent”:** the volume of an open mesh is
+  undefined, so it can't float; close it (Fill, Solidify and apply) or use a
+  closed stand-in and parent the detailed mesh to it — but the floater itself
+  must have no parent. Unparent it with *Clear Parent and Keep Transform*.
+- **The object doesn't move when I drag it:** after Bake Floaters it is keyed.
+  Clear Floaters (×) puts it back and removes the keys; move it and bake again.
+  Removing it from Floating Objects does the same.
+- **A wood cube tips over onto a corner:** that is real. A cube between about
+  a fifth and four fifths of water's density (cork, wood, oak) is unstable
+  floating flat; ice and foam cubes stay level. Make it flatter (a plank or
+  raft stays level).
+- **Floaters in waves bob too much:** they respond to the full wave height with
+  their own natural bounce; in Rolling Waves a wooden box heaves about 1.3× the
+  wave. Heavier (deeper) objects and longer waves respond less.
+- **Pushes Water: the water level doesn't rise:** Mantaflow removes the water
+  inside an object instead of pushing it aside, so you get splashes and wakes
+  but not a higher level (it loses under 1% of the water). Raising the water
+  source slightly makes up for big objects.
+- **Pushes Water: Blender stops responding while baking:** the water and
+  floaters bake together in one blocking bake; Blender is busy until it
+  finishes and has no Cancel. The confirmation gives a rough time. For a long
+  shot, bake a short frame range first.
+- **“Only N cells across: too small to push water”:** an object needs about 5
+  simulation cells across to move water; raise Resolution or turn Pushes Water
+  off (it still floats).
+- **Free Bake or Delete moved my object:** floaters keyed on that water lose
+  their keys and go back where they were, with your own animation restored.
+
 # Beginner workflow (0.19.0 preview)
 
 - **Water is invisible or looks like glass:** add Water Lighting, then use

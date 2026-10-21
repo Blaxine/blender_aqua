@@ -179,6 +179,10 @@ def remove_cache(assembly_uuid):
 
 def delete_assembly(scene, assembly_uuid, delete_cache=False):
     entry = registry.get(scene, assembly_uuid)
+    # Floaters keyed on this water go back where they were (they stay in
+    # Floating Objects).
+    from . import floating
+    floating.clear_water(assembly_uuid)
     if entry is not None:
         from . import lighting
         lighting.restore(scene, entry)

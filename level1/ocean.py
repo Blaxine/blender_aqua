@@ -295,6 +295,11 @@ class AQS_OT_ocean_attach_buoy(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     uuid: StringProperty()
+    material: bpy.props.EnumProperty(
+        name="Material", default="MANUAL",
+        items=[("MANUAL", "Manual Offset", "Set Buoyancy Offset by hand")]
+        + C.float_material_items(floating_only=True),
+        description="What the floater is made of: sets how deep it sits")
 
     @classmethod
     def poll(cls, context):
@@ -341,6 +346,7 @@ class AQS_OT_ocean_attach_buoy(bpy.types.Operator):
         b.radius = max(max(obj.dimensions.x, obj.dimensions.y) * 0.5, 0.05)
         # XY only: a tall mast must not inflate the wave-sample radius
         b.added_constraints = ";".join(added)
+        b.material = self.material  # sets the offset from the density
 
         self.report({"INFO"}, f"Floater attached: {obj.name}")
         return {"FINISHED"}

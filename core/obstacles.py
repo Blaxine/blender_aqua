@@ -41,7 +41,7 @@ def members(scene):
     return list(col.objects) if col is not None else []
 
 
-def _in_any_obstacle_collection(obj):
+def is_member(obj):
     for scene in bpy.data.scenes:
         col = getattr(scene, "aqs_obstacles", None)
         if col is not None and obj.name in col.objects:
@@ -56,6 +56,9 @@ def eligible(obj):
         return False, "not a mesh"
     if C.SRC_PROP in obj.keys():
         return False, "it is a water source"
+    from . import floating
+    if floating.is_member(obj):
+        return False, "it is a Floating Object"
     fluid = next((m for m in obj.modifiers if m.type == "FLUID"), None)
     if fluid is not None and getattr(fluid, "fluid_type", "") != "EFFECTOR":
         return False, "it already has a Fluid setup"
@@ -79,13 +82,20 @@ def _apply(obj):
             col.friction_random = 0.2
         mark["collision"] = True
     if not any(m.type == "FLUID" for m in obj.modifiers):
-        fluid = obj.modifiers.new("AQS Effector", "FLUID")
-        fluid.fluid_type = "EFFECTOR"
-        es = fluid.effector_settings
-        if hasattr(es, "effector_type"):
-            es.effector_type = "COLLISION"
+        add_fluid_effector(obj, "AQS Effector")
         mark["fluid"] = True
     obj[MARK_PROP] = json.dumps(mark)
+
+
+def add_fluid_effector(obj, name):
+    """A collision Fluid effector; floaters that push water use it too,
+    with their own mark so sync() leaves them alone."""
+    fluid = obj.modifiers.new(name, "FLUID")
+    fluid.fluid_type = "EFFECTOR"
+    es = fluid.effector_settings
+    if hasattr(es, "effector_type"):
+        es.effector_type = "COLLISION"
+    return fluid
 
 
 def _unapply(obj):
@@ -130,7 +140,7 @@ def sync(scene):
         if MARK_PROP not in obj.keys() and eligible(obj)[0]:
             _apply(obj)
     for obj in bpy.data.objects:
-        if MARK_PROP in obj.keys() and not _in_any_obstacle_collection(obj):
+        if MARK_PROP in obj.keys() and not is_member(obj):
             _unapply(obj)
     thickness = _effector_thickness(scene)
     for obj in objs:

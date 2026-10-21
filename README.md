@@ -74,6 +74,7 @@ Memory information and Set Up Render Layers appear while any box is Advanced.
 | Falling snow (7 flake shapes) | **Create → Snow** | Press Play |
 | Turn my mesh into liquid | Select the mesh → **Still Water** | Click the red **Bake (required)** button — Level 2 is Mantaflow FLIP and must bake |
 | Real simulated rain splashing into water | **Create → Rain Sim** | Pick a preset; adjust Drop Amount, Speed and Angle. Select a mesh and click **＋** next to *Pool meshes*, then save and Bake. Advanced holds Draft, resolution and other settings |
+| Crates, ice or a raft floating in simulated water | Add the objects to **Floating Objects** in the Still Water, Rain Sim or Ocean (Simulated) box and pick a Material | Bake the liquid, then **Bake Floaters**. Turn on **Pushes Water** for splashes and wakes |
 | An aimable hose / jet | **Create → Water Hose** | Press Play — rotate or keyframe the nozzle to aim; pick a regime (**Normal / Mist / Spray / Blast**), all real-time; set **Water Color**. Add floors and walls to **Water Obstacles** so the water hits them |
 
 ## The rules AquaSuite lives by
@@ -96,6 +97,12 @@ Memory information and Set Up Render Layers appear while any box is Advanced.
   ignores other collision objects). Remove an object (**−**, or unlink it
   in the Outliner) and AquaSuite takes back exactly what it added.
   Water sources and existing user Fluid setups can't be obstacles.
+- **Floaters work the same way.** **＋** next to *Floating objects* adds
+  the selected closed meshes to the scene's **AQS Floating Objects**
+  collection. Taking an object out (**−**, the Outliner, **Clear
+  Floaters**, freeing or deleting the liquid it floats on) removes its
+  floater keys and puts it back where it was, with its own animation.
+  An object is either an obstacle or a floater, never both.
 - **Quality is one switch.** The scene-wide **Preview/Final** tier
   reduces particle display and ocean resolution non-destructively;
   your authored values come back exactly when you return to Final.
@@ -185,6 +192,34 @@ FLIP simulation;
 Reactive Rain's ripple bake is optional but recommended before
 timeline scrubbing.
 
+## Floating objects
+
+Objects float (or sink) on the water of the liquid setup whose tank they are
+in: Still Water, Rain Sim, Ocean (Simulated) and the hose's Simulate Liquid.
+Mantaflow can't push objects, so AquaSuite works out buoyancy, water drag and
+contacts with the tank itself and keys the motion.
+
+- **Material** sets the density: Foam, Cork, Wood, Oak, Ice and Plastic float;
+  Rubber, Concrete and Steel sink. **Custom** takes any density, and **Mass
+  Override** gives the mass directly (hollow objects, boats). The panel shows
+  the mass and how deep the object floats ("75 kg · floats ~60% submerged").
+- Objects must be closed meshes without a parent, inside the tank.
+- **Bake Floaters** needs the liquid baked; it takes about 2 ms per object
+  per frame plus 50–130 ms to read the water. Bake Floaters again after
+  moving an object: each bake starts from where you put it.
+- **Pushes Water** makes the object move the water as well: it splashes when
+  it drops in and makes a wake when it drifts. Bake Floaters then bakes the
+  water and the floaters together in one bake (about 10–30% longer than the
+  liquid bake alone). **Blender is busy until it finishes** — there is no
+  progress bar in the panel and no Cancel. The water level doesn't rise: the
+  simulation removes the water inside the object instead of pushing it aside
+  (under 1% of the tank's water). An object needs about 5 cells across to
+  push water; the panel warns when it is smaller.
+- A level cube of wood tips onto an edge or corner: that is how such a cube
+  really floats. Flat shapes (planks, rafts) stay level.
+- **Plane Ocean** floaters stay deterministic and need no bake; pick a
+  Material next to the floater to set how deep it sits.
+
 ## Baking speed & stability (read if bakes feel slow)
 
 Bakes run as a **background job**: Blender stays responsive, a progress
@@ -236,6 +271,10 @@ liquid at 200+ resolution can genuinely need many GB of RAM.
   and Mist — that hit Water Obstacles and splash along them; Water Color
   tints it. *Simulate Liquid* (Beta) swaps the jet for a baked Mantaflow
   liquid when you need pools.
+- 0.21.0: **Floating Objects** — crates, ice and rafts float on simulated water
+  and steel sinks, from a material or mass; **Pushes Water** lets them splash
+  and leave wakes. Plane Ocean floaters can take a material instead of a
+  hand-set Buoyancy Offset.
 - 0.20.0: Ocean (Simulated) makes waves with a force-field wave maker instead
   of a paddle, so waves now travel down the tank and reach about their target
   height mid-tank (Calm, Rolling Waves and Storm Surf were measured). Old tanks
