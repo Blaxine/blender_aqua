@@ -311,6 +311,10 @@ def _draw_spec(box, context, entry):
         # a preset button or one of the grouped advanced controls.
         box = root.column()
         box.enabled = not baking or control in ('bake', 'ripples', 'hose_liquid_controls')
+        if control.startswith(('entry:', 'ocean:', 'particles:')):
+            # Label on the left, value on the right: easier to scan.
+            box.use_property_split = True
+            box.use_property_decorate = False
         if control.startswith('entry:'):
             row = box.row()
             row.enabled = not baking
@@ -443,8 +447,102 @@ def _draw_pre_release(box, entry):
         sub.label(text="Recreate to update")
 
 
+# Create buttons, grouped by what the user must do after clicking.
+_REALTIME = (
+    ("aquasuite.ocean_create", "Ocean", C.MODE_OCEAN),
+    ("aquasuite.rain_create", "Rain", C.MODE_RAIN),
+    ("aquasuite.rain_reactive_create", "Reactive Rain", C.MODE_RRAIN),
+    ("aquasuite.snow_create", "Snow", C.MODE_SNOW),
+    ("aquasuite.hose_create", "Water Hose", C.MODE_HOSE),
+)
+_LIQUID = (
+    ("aquasuite.still_water_create", "Still Water", C.MODE_STILL),
+    ("aquasuite.rain_sim_create", "Rain Sim", C.MODE_SIMRAIN),
+    ("aquasuite.simulated_ocean_create", "Ocean (Simulated)", C.MODE_SIMOCEAN),
+)
+
+
+def _is_liquid(entry):
+    return entry.mode in presets.LIQUID_MODES and (
+        entry.mode != C.MODE_HOSE or entry.hose_liquid)
+
+
+def _next_step(context, entry):
+    """One plain-language hint for what to do next: (text, icon, alert)
+    or None when there is nothing to say."""
+    if entry.mode == C.MODE_LIGHTING or bakes.is_baking(entry):
+        return None
+    if _is_liquid(entry):
+        if not bpy.data.is_saved:
+            return "Save the .blend first: bakes go next to it", "ERROR", True
+        if not bakes.has_bake(entry):
+            return None     # the red Bake (required) button says it already
+    elif entry.mode == C.MODE_RRAIN and not bakes.has_bake(entry):
+        return "Bake Ripples before scrubbing the timeline", "INFO", False
+    screen = context.screen
+    if screen is not None and screen.is_animation_playing:
+        return None
+    return "Press Play (Space) to see it move", "PLAY", False
+
+
+def _draw_entry_box(layout, context, entry):
+    box = layout.box()
+    header = box.row(align=True)
+    header.prop(entry, "show_expanded", text="", emboss=False,
+                icon="DISCLOSURE_TRI_DOWN" if entry.show_expanded
+                else "DISCLOSURE_TRI_RIGHT")
+    header.label(text=C.MODE_LABELS.get(entry.mode, entry.mode),
+                 icon=C.MODE_ICONS.get(entry.mode, "QUESTION"))
+    if beta.is_beta(entry.mode) or (entry.mode == C.MODE_HOSE
+                                    and entry.hose_liquid):
+        header.label(text="", icon="EXPERIMENTAL")     # Beta, as in Create
+    op = header.operator("aquasuite.assembly_delete", text="", icon="TRASH")
+    op.uuid = entry.uuid
+    if not entry.show_expanded:
+        return
+
+    try:
+        if entry.show_advanced and registry.is_pre_release(entry):
+            _draw_pre_release(box, entry)
+        hint = _next_step(context, entry)
+        if hint is not None:
+            text, icon, alert = hint
+            row = box.row()
+            row.alert = alert
+            row.label(text=text, icon=icon)
+        _draw_spec(box, context, entry)
+    except Exception as exc:
+        err = box.row()
+        err.alert = True
+        err.label(text="This setup can't be displayed", icon="ERROR")
+        errors.record("AquaSuite couldn't draw a setup", exc,
+                      mode=entry.mode, uuid=entry.uuid)
+        errors.schedule()
+
+    # The Simple/Advanced switch, in words, at the foot of the box.
+    row = box.row()
+    row.prop(entry, "show_advanced", emboss=False,
+             text="Fewer Settings" if entry.show_advanced else "More Settings",
+             icon="TRIA_UP" if entry.show_advanced else "TRIA_DOWN")
+
+
+class AQS_OT_setups_expand(bpy.types.Operator):
+    bl_idname = "aquasuite.setups_expand"
+    bl_label = "Collapse or Expand All"
+    bl_description = ("Collapse every setup box, or expand them all when "
+                      "they are all collapsed")
+    bl_options = {"INTERNAL"}
+
+    def execute(self, context):
+        entries = registry.entries(context.scene)
+        expand = not any(e.show_expanded for e in entries)
+        for e in entries:
+            e.show_expanded = expand
+        return {"FINISHED"}
+
+
 class AQS_PT_water(bpy.types.Panel):
-    bl_label = "Water"
+    bl_label = "AquaSuite"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Water"
@@ -452,78 +550,103 @@ class AQS_PT_water(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+        layout.use_property_split = True
+        layout.use_property_decorate = False
 
-        layout.prop(scene, "aqs_quality", text="Quality")
+        layout.prop(scene, "aqs_quality", expand=True)
         from ..core import lighting
         if lighting.suggested(scene):
-            layout.label(text='Water may look invisible without lighting', icon='INFO')
-            layout.operator('aquasuite.water_lighting')
-        layout.operator('aquasuite.load_demo', icon='SCENE_DATA')
+            box = layout.box()
+            col = box.column(align=True)
+            col.label(text="Water may look invisible", icon="INFO")
+            col.label(text="without lighting.", icon="BLANK1")
+            box.operator("aquasuite.water_lighting", icon="LIGHT_SUN")
         entries = registry.entries(scene)
-        advanced = control_spec.advanced_visible(entries)
         from ..core import memory
-        low, high = memory.scene_allowance(scene) if advanced else (0, 0)
+        low, high = (memory.scene_allowance(scene)
+                     if control_spec.advanced_visible(entries) else (0, 0))
         if high:
-            layout.label(text=f'Liquid total: {low:.2f}–{high:.2f} GB planning allowance')
-            layout.label(text='Excludes other geometry, rendering and Blender overhead')
+            col = layout.column(align=True)
+            col.label(text=f"Liquid total: {low:.2f}–{high:.2f} GB", icon="MEMORY")
+            col.label(text="Planning allowance; excludes rendering", icon="BLANK1")
 
-        create = layout.box()
-        create.label(text="Create", icon="ADD")
-        row = create.row()
-        row.enabled = lighting.existing(scene) is None
-        row.operator('aquasuite.water_lighting', icon='LIGHT_SUN')
-        row = create.row(align=True)
-        row.operator("aquasuite.ocean_create", text="Ocean", icon=C.MODE_ICONS[C.MODE_OCEAN])
-        row.operator("aquasuite.rain_create", text="Rain", icon=C.MODE_ICONS[C.MODE_RAIN])
-        row = create.row(align=True)
-        row.operator("aquasuite.rain_reactive_create", text="Reactive Rain")
-        row.operator("aquasuite.snow_create", text="Snow")
-        row = create.row(align=True)
-        row.operator("aquasuite.still_water_create",
-                     text="Still Water (active mesh) · Beta")
-        row = create.row(align=True)
-        row.operator("aquasuite.hose_create", text="Water Hose")
-        row.operator("aquasuite.rain_sim_create", text="Rain Sim · Beta",
-                     icon=C.MODE_ICONS[C.MODE_SIMRAIN])
-        create.operator('aquasuite.simulated_ocean_create',
-                        text='Ocean (Simulated) · Beta', icon='MOD_OCEAN')
 
-        entries = registry.entries(scene)
+class AQS_PT_water_create(bpy.types.Panel):
+    bl_label = "Create"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Water"
+    bl_parent_id = "AQS_PT_water"
+
+    def draw(self, context):
+        layout = self.layout
+        from ..core import lighting
+
+        col = layout.column(align=True)
+        col.label(text="Real-time · plays instantly", icon="PLAY")
+        grid = col.grid_flow(row_major=True, columns=0, even_columns=True,
+                             align=True)
+        for op_id, text, mode in _REALTIME:
+            grid.operator(op_id, text=text, icon=C.MODE_ICONS[mode])
+
+        col = layout.column(align=True)
+        col.label(text="Liquid · needs a bake · Beta", icon="EXPERIMENTAL")
+        grid = col.grid_flow(row_major=True, columns=0, even_columns=True,
+                             align=True)
+        for op_id, text, mode in _LIQUID:
+            grid.operator(op_id, text=text, icon=C.MODE_ICONS[mode])
+        if not bpy.ops.aquasuite.still_water_create.poll():
+            row = col.row()
+            row.enabled = False
+            row.label(text="Still Water: select a mesh first", icon="INFO")
+
+        col = layout.column(align=True)
+        col.label(text="Scene", icon="SCENE_DATA")
+        row = col.row(align=True)
+        sub = row.row(align=True)
+        sub.enabled = lighting.existing(context.scene) is None
+        sub.operator("aquasuite.water_lighting", text="Water Lighting",
+                     icon="LIGHT_SUN")
+        row.operator("aquasuite.load_demo", icon="FILE_BLEND")
+
+
+class AQS_PT_water_setups(bpy.types.Panel):
+    bl_label = "Your Setups"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Water"
+    bl_parent_id = "AQS_PT_water"
+
+    def draw_header_preset(self, context):
+        entries = registry.entries(context.scene)
+        row = self.layout.row(align=True)
+        if len(entries):
+            row.label(text=str(len(entries)))
+        if len(entries) > 1:
+            any_open = any(e.show_expanded for e in entries)
+            row.operator("aquasuite.setups_expand", text="", emboss=False,
+                         icon="FULLSCREEN_EXIT" if any_open else "FULLSCREEN_ENTER")
+
+    def draw(self, context):
+        layout = self.layout
+        entries = registry.entries(context.scene)
         if not entries:
+            col = layout.column(align=True)
+            col.enabled = False
+            col.label(text="Nothing here yet.", icon="INFO")
+            col.label(text="Click a Create button above,", icon="BLANK1")
+            col.label(text="or explore the demo scene:", icon="BLANK1")
+            layout.operator("aquasuite.load_demo", icon="FILE_BLEND")
             return
-        if advanced and any(e.mode in presets.LIQUID_MODES and
-               (e.mode != C.MODE_HOSE or e.hose_liquid) for e in entries):
-            layout.operator('aquasuite.setup_render_layers', icon='RENDERLAYERS')
-        layout.separator()
-        layout.label(text="Assemblies", icon="OUTLINER_COLLECTION")
 
         for entry in entries:
-            box = layout.box()
-            header = box.row(align=True)
-            header.label(text=C.MODE_LABELS.get(entry.mode, entry.mode),
-                         icon=C.MODE_ICONS.get(entry.mode, "QUESTION"))
-            if beta.is_beta(entry.mode) or (entry.mode == C.MODE_HOSE
-                                            and entry.hose_liquid):
-                header.label(text="Beta", icon="EXPERIMENTAL")
-            header.prop(entry, 'show_advanced', text='', icon='PREFERENCES', toggle=True)
-            op = header.operator("aquasuite.assembly_delete", text="", icon="TRASH")
-            op.uuid = entry.uuid
-            if entry.show_advanced and registry.is_pre_release(entry):
-                _draw_pre_release(box, entry)
+            _draw_entry_box(layout, context, entry)
 
-            try:
-                self._draw_entry(box, context, entry)
-            except Exception as exc:
-                err = box.row()
-                err.alert = True
-                err.label(text="This setup can't be displayed", icon="ERROR")
-                errors.record("AquaSuite couldn't draw a setup", exc,
-                              mode=entry.mode, uuid=entry.uuid)
-                errors.schedule()
-
-    def _draw_entry(self, box, context, entry):
-        _draw_spec(box, context, entry)
+        if control_spec.advanced_visible(entries) and any(
+                _is_liquid(e) for e in entries):
+            layout.operator("aquasuite.setup_render_layers", icon="RENDERLAYERS")
 
 
 CLASSES = (AQS_OT_assembly_delete, AQS_OT_set_resolution,
-           AQS_OT_set_resolution_custom, AQS_PT_water)
+           AQS_OT_set_resolution_custom, AQS_OT_setups_expand,
+           AQS_PT_water, AQS_PT_water_create, AQS_PT_water_setups)

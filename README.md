@@ -51,8 +51,14 @@ degradation* below).
 
 ## Quick start
 
-Setups open in **Simple** view. Click the gear-shaped **Advanced** toggle in a
-setup's header for all controls; each box remembers its choice. Create buttons
+The Water tab has two sections. **Create** groups the buttons by what follows:
+*Real-time* effects play at once, *Liquid* effects need a bake. **Your Setups**
+holds one box per setup. Click a box's arrow to fold it away, or the icon next
+to the count to fold or unfold all of them. Each box shows a hint for the next
+step, such as saving the file before a bake.
+
+Setups open in **Simple** view. Click **More Settings** at the foot of a box
+for all controls; each box remembers its choice. Create buttons
 build immediately with their default look. Use Preset in the box, or Blender's
 Adjust Last Operation panel (F9) immediately after creation, to change options.
 

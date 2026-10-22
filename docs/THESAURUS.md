@@ -47,7 +47,7 @@ before introducing it anywhere else.
 | Wave Maker | A tagged Wind force field over a full-depth zone at the tank's left wall; a sine F-Curve modifier drives its strength. | Wave Height sets the strength (linear theory); Wave Period is seconds per wave. |
 | Wave Paddle | The pre-0.20 wave maker: a tagged collision effector moved by a sine F-Curve modifier. | Kept in old tanks until Upgrade Wave Maker replaces it. |
 | Simple view | Default per-setup view with the most useful look controls and actions. | UI state only; saved with the setup. |
-| Advanced view | Per-setup gear toggle revealing all controls. | Also reveals scene memory information and render-layer setup. |
+| Advanced view | Per-setup More Settings toggle revealing all controls. | Also reveals scene memory information and render-layer setup. |
 | Control specification | Ordered per-mode control IDs used by the panel and headless tests. | `ui/control_spec.py` |
 | Water Lighting | Removable sky world, sun and supported render-setting adjustments. | Delete restores the saved world/settings. |
 | Demo scene | A separate procedural real-time showcase, built by Load Demo. | Original scenes are preserved. |
