@@ -71,7 +71,7 @@ Makes AquaSuite's Mantaflow liquids one-click and art-directable for users who d
 - **Liquid setup box (Still Water, Rain Sim, hose with Simulate Liquid, Ocean (Simulated)):** a Preset row — dropdown + Apply, showing the last-applied preset or "Custom", with "(modified)" when edited. Below it a **Whitewater** section: three rows (Spray, Foam, Bubbles), each a checkbox plus Amount and Size sliders, greyed while unchecked; a note "Off while Draft is on" when Draft suspends them.
 - **Render layers:** a scene-level "Set Up Render Layers" button (in the Water panel, shown once any liquid setup exists) that enables Cryptomatte Material and the four AOVs on the active view layer and reports what it turned on; idempotent.
 - **Create:** each liquid Create button opens with the default preset (Calm Pour / Rain / Garden / Rolling Waves); the operator's Preset property is changeable in the redo panel.
-- **Ocean (Simulated):** Create button "Ocean (Simulated) · Beta" in the Create box; its box shows Preset, Wave Height, Wave Period, Tank Size, Draft/Resolution, Whitewater, Water obstacles row, Bake.
+- **Ocean (Simulated):** Create button "Ocean (Simulated)" under the Create sub-panel's "Liquid · needs a bake · Beta" heading (labelled "Ocean (Simulated) · Beta" before the 2026-10-22 panel revision in REQ-003); its box shows Preset, Wave Height, Wave Period, Tank Size, Draft/Resolution, Whitewater, Water obstacles row, Bake.
 - **Empty/edge states:** applying a preset to a baked setup leaves the bake in place and shows the existing "Bake Again" state; whitewater sliders do nothing visible until re-bake (tooltip says so).
 
 ## Acceptance Criteria

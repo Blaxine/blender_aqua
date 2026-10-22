@@ -225,6 +225,8 @@ class AQS_AssemblyEntry(bpy.types.PropertyGroup):
         subtype='ANGLE', update=_lighting_update, description='Sun elevation above the horizon')
     show_advanced: BoolProperty(name='Advanced', default=False,
         description='Show all controls for this setup')
+    show_expanded: BoolProperty(name='Expanded', default=True,
+        description="Show or hide this setup's controls")
     uuid: StringProperty()
     mode: StringProperty()
     created: StringProperty()

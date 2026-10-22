@@ -223,8 +223,8 @@
   Rendered shading. Material Preview normally uses its own environment; enable
   Scene World and Scene Lights to see the added sky and sun. Liquid modes still
   need a saved file and a bake. Lighting does not generate liquid or add a camera.
-- **Controls disappeared:** each setup defaults to Simple. Click its Advanced
-  gear for whitewater, resolution details, bake range and specialist settings.
+- **Controls disappeared:** each setup defaults to Simple. Click **More Settings**
+  at the foot of its box for whitewater, resolution details, bake range and specialist settings.
   Memory information and Set Up Render Layers require at least one Advanced box.
 - **Create did not ask for options:** this is intentional. Change the preset in
   the setup box or open Adjust Last Operation (F9) immediately after creating.
