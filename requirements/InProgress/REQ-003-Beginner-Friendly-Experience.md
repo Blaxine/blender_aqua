@@ -10,7 +10,7 @@
 | Area | Water panel, Create operators, scene lighting/render setup, demo scene, preset tuning |
 | Author | Blaxine |
 | Created | 2026-10-18 |
-| Last Updated | 2026-10-18 |
+| Last Updated | 2026-10-22 |
 
 > Builds on REQ-001 (launch readiness) and REQ-002 (presets, whitewater, Ocean (Simulated)); takes over REQ-002's open tuning items S015, S027, Q5 and Q7.
 
@@ -22,6 +22,29 @@ S019–S021 and running/accepting S023 remain pending visual review. The user
 confirmed no visual observations/renders yet. Slice 6 provides documentation
 and the beginner-session protocol; S028 requires real participants and is pending.
 UI smoke tests and EEVEE/Cycles visual acceptance remain manual gates.
+
+## Panel layout revision — 2026-10-22
+
+The Water tab was regrouped for beginners. The UI / UX Notes, Technical Notes
+and Smoke Test below describe the new layout. The slice tables keep the original
+wording, with a note where something moved.
+
+- **Sections.** A short top panel ("AquaSuite": Quality as Preview | Final
+  buttons, the lighting hint, the memory lines while any box is Advanced), then
+  two collapsible sub-panels, **Create** and **Your Setups**.
+- **Create** groups buttons by what follows: *Real-time · plays instantly*
+  (Ocean, Rain, Reactive Rain, Snow, Water Hose), *Liquid · needs a bake · Beta*
+  (Still Water, Rain Sim, Ocean (Simulated)), and *Scene* (Water Lighting, Load
+  Demo). The Beta label sits on the Liquid heading, not on each button.
+- **Load Demo** moved from the panel top to Create › Scene, and to the empty
+  state of Your Setups.
+- **Your Setups** shows the setup count and a collapse/expand-all button in its
+  header, and "Nothing here yet" plus Load Demo when there are no setups.
+- **Setup boxes** fold with an arrow (new `show_expanded` entry setting, UI
+  state only, data version unchanged). Beta is a flask icon in the header. A
+  next-step hint sits at the top of the body. The Advanced toggle moved from a
+  gear in the header to a **More Settings / Fewer Settings** text toggle at the
+  foot of the box.
 
 ## Short Description
 
@@ -52,12 +75,14 @@ Makes AquaSuite usable by Blender beginners without help. Every setup box opens 
 
 ## UI / UX Notes
 
-- **Panel top (Simple):** Quality, then the lighting hint when it applies ("Water may look invisible without lighting — Add Water Lighting"), then **Load Demo**, then the Create box.
-- **Setup box header:** mode label, Beta tag when applicable, an **Advanced** toggle (icon button), Delete. Simple body per the specification above; Advanced shows today's full layout.
+- **Panel top (Simple):** Quality (Preview | Final buttons), then the lighting hint when it applies ("Water may look invisible without lighting — Add Water Lighting"). Below it, the collapsible **Create** and **Your Setups** sub-panels.
+- **Create sub-panel:** *Real-time · plays instantly* buttons, *Liquid · needs a bake · Beta* buttons, and a *Scene* row with Water Lighting and **Load Demo**.
+- **Your Setups sub-panel:** the setup count and a collapse/expand-all button in its header; one box per setup; Set Up Render Layers at the bottom while any liquid box is Advanced.
+- **Setup box header:** fold arrow, mode label, Beta flask icon when applicable, Delete. The body starts with a next-step hint ("Press Play (Space) to see it move", "Bake Ripples before scrubbing", or a red "Save the file before baking" on liquids in an unsaved file). Simple body per the specification above; Advanced shows today's full layout. The **More Settings / Fewer Settings** toggle at the foot of the box switches between them.
 - **Create:** one click; a status-bar note "Change the look in the setup box" after liquid creates.
 - **Water Lighting box:** Simple — Sun Strength, Sun Angle (time of day); Advanced — sky type, render-setting checklist (what was changed).
 - **Demo:** "Load Demo" switches the window to "AquaSuite Demo"; the scene is deletable from Blender's scene selector.
-- **Empty/edge states:** Still Water without an active mesh shows its existing hint; a scene that already has an AquaSuite Water Lighting shows no hint and disables a second Add.
+- **Empty/edge states:** Still Water without an active mesh is greyed out with "Still Water: select a mesh first" below it; no setups shows "Nothing here yet" and Load Demo in Your Setups; a scene that already has an AquaSuite Water Lighting shows no hint and disables a second Add.
 
 ## Acceptance Criteria
 
@@ -72,7 +97,7 @@ Makes AquaSuite usable by Blender beginners without help. Every setup box opens 
 
 ## Technical Notes
 
-- **Panel:** `ui/panel.py` — `AQS_PT_water.draw` (Quality, `memory.scene_allowance` readout, Create box, `aquasuite.setup_render_layers`, per-entry box with header and `_draw_entry`), per-mode drawers `_draw_ocean`, `_draw_particles`, `_draw_fluid_settings`, `_draw_bake`, `_draw_preset`, `_draw_whitewater`, `_draw_simulated_ocean`, `_draw_rain_sim`, `_draw_obstacles`, `_draw_hose`, `_draw_pre_release`.
+- **Panel:** `ui/panel.py` — `AQS_PT_water.draw` (Quality, lighting hint, `memory.scene_allowance` readout), `AQS_PT_water_create` (Create buttons from `_REALTIME` / `_LIQUID`, Scene row), `AQS_PT_water_setups` (per-entry boxes via `_draw_entry_box` → `_next_step` + `_draw_spec`, `aquasuite.setup_render_layers`), `aquasuite.setups_expand`, per-mode drawers `_draw_ocean`, `_draw_particles`, `_draw_fluid_settings`, `_draw_bake`, `_draw_preset`, `_draw_whitewater`, `_draw_simulated_ocean`, `_draw_rain_sim`, `_draw_obstacles`, `_draw_hose`, `_draw_pre_release`.
 - **Ocean inputs:** `level1/ocean.py` `INPUTS` (Size, Resolution, Amplitude, Wavelength, Choppiness, Direction, Spread, Speed), drawn through `_socket_identifier`.
 - **Create dialogs to remove:** `level2/still_water.py` (invoke at ≈ line 162), `level2/rain_sim.py` (≈ 682), `level3/hose.py` (≈ 326, plus its `draw` for Simulate Liquid/Preset), `level2/simulated_ocean.py` (≈ 127). Default presets: `core/presets.DEFAULTS`.
 - **Assembly machinery:** `core/registry.py` `AQS_AssemblyEntry` and `registry.add`; `core/naming.py` (`tag`, `new_assembly_collection`); `core/delete.py` (`delete_assembly`, `guarded_create`, `_TAGGED_COLLECTIONS` — `worlds` and `lights` are not swept today); modes in `constants.py` `MODE_*`, `MODE_LABELS`, `MODE_ICONS`; Beta modes `ui/beta.py`.
@@ -99,7 +124,7 @@ Makes AquaSuite usable by Blender beginners without help. Every setup box opens 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
 | ✓ | S001 | F | Control specification | Data listing Simple and Advanced controls per mode; first entry Ocean (Simulated). | — | `ui/` |
-| ✓ | S002 | P | Per-box Advanced flag | Entry setting, default off; drawn as a header toggle. | — | `core/registry.py` |
+| ✓ | S002 | P | Per-box Advanced flag | Entry setting, default off; drawn as a header toggle (moved to the box foot as More Settings, 2026-10-22). | — | `core/registry.py` |
 | ✓ | S003 | U | Ocean (Simulated) box from the spec | Simple/Advanced drawing for this mode driven by the specification. | S001, S002 | `ui/panel.py` |
 | ✓ | S004 | S | One-click ocean Create | Remove the dialog; default preset; options in the redo panel. | — | `level2/simulated_ocean.py` |
 | ✓ | S005 | T | Tracer tests (new) | Spec entries name real settings; Simple ⊂ all controls; ocean Create executes without a dialog. | S003, S004 | new `tests/test_simple_view.py` |
@@ -138,7 +163,7 @@ Makes AquaSuite usable by Blender beginners without help. Every setup box opens 
 | Done | # | Phase | Title | Description | Depends on | Primary files |
 | ---- | - | ----- | ----- | ----------- | ---------- | ------------- |
 | ✓ | S016 | S | Load Demo | New scene; Plane Ocean + floater, Plane Rain, Water Hose aimed at a wall added to Water Obstacles, Water Lighting, camera; window switch when a window exists. | S011 | new module |
-| ✓ | S017 | U | Button | "Load Demo" at the panel top. | S016 | `ui/panel.py` |
+| ✓ | S017 | U | Button | "Load Demo" at the panel top (moved to Create › Scene and the empty Your Setups, 2026-10-22). | S016 | `ui/panel.py` |
 | ✓ | S018 | T | Demo tests (new) | Demo scene contents; user scene object/world/settings unchanged; demo plays (particles alive, floater moves) with no bake. | S016 | new test file |
 
 ### Slice 5 — Preset tuning (from REQ-002)
@@ -213,9 +238,9 @@ S026
 
 > Developer runs the app; the agent does not self-run.
 
-1. New file. The Water tab shows Quality, the lighting hint, Load Demo and Create — no memory lines, no render-layers button.
+1. New file. The Water tab shows Quality, the lighting hint (only when the scene has no lights and a default world), Create (Real-time, Liquid, Scene with Load Demo) and Your Setups saying "Nothing here yet" — no memory lines, no render-layers button.
 2. Add Water Lighting: the viewport (Material Preview / Rendered) shows a sky and sun. Delete it: the original grey world and settings return.
-3. Click Ocean (Simulated): a tank appears immediately; the box shows Preset, Wave Height, Wave Period, Water obstacles, Bake. Toggle Advanced: everything else appears. Save, reopen: still Advanced.
+3. Click Ocean (Simulated): a tank appears immediately; the box shows Preset, Wave Height, Wave Period, Water obstacles, Bake, and (in an unsaved file) a red "Save the file before baking" hint. Click More Settings: everything else appears. Save, reopen: still Advanced. Fold the box with its arrow, then use the collapse/expand-all button in the Your Setups header.
 4. Click Still Water (with a cube active), Rain Sim, Water Hose: each creates at once; the redo panel (bottom-left) shows their options.
 5. Load Demo: "AquaSuite Demo" opens; press Play — the box floats, rain falls, the hose hits the wall. Your original scene is unchanged.
 6. Bake Storm Surf: waves keep breaking until the last frame.

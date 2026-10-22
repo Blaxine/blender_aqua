@@ -474,11 +474,11 @@ def _next_step(context, entry):
         return None
     if _is_liquid(entry):
         if not bpy.data.is_saved:
-            return "Save the .blend first: bakes go next to it", "ERROR", True
+            return "Save the file before baking", "ERROR", True
         if not bakes.has_bake(entry):
             return None     # the red Bake (required) button says it already
     elif entry.mode == C.MODE_RRAIN and not bakes.has_bake(entry):
-        return "Bake Ripples before scrubbing the timeline", "INFO", False
+        return "Bake Ripples before scrubbing", "INFO", False
     screen = context.screen
     if screen is not None and screen.is_animation_playing:
         return None
