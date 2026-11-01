@@ -59,7 +59,8 @@ class AQS_FloatSettings(bpy.types.PropertyGroup):
     density: FloatProperty(
         name="Density", default=600.0, min=1.0, soft_max=10000.0,
         precision=0, unit="NONE",
-        description="kg/m³. Water is 1000: lighter floats, heavier sinks")
+        description="kg/m³. Lighter than the liquid floats, heavier sinks "
+                    "(water is 1000)")
     use_mass: BoolProperty(
         name="Mass Override", default=False,
         description="Give the mass directly instead of the density "
@@ -87,15 +88,25 @@ def mass_of(obj):
     return mass, mass / volume
 
 
-def buoyancy_note(obj):
-    """'75 kg · floats ~60% submerged' / '... · sinks'."""
+def liquid_density(entry):
+    """kg/m³ of what this setup's floaters float in: a real-liquid preset's
+    density, water's for everything else."""
+    from ..level2 import floaters
+    from . import liquids, presets
+    liquid = presets.CATALOG.get(entry.preset_id, {}).get('liquid') if entry else None
+    return liquids.LIQUIDS[liquid]['density'] if liquid else floaters.RHO_WATER
+
+
+def buoyancy_note(obj, entry=None):
+    """'75 kg · floats ~60% submerged' / '... · sinks', in this setup's liquid
+    (water without one)."""
     mass, density = mass_of(obj)
     if mass is None:
         return ""
-    from ..level2 import floaters
-    if density >= floaters.RHO_WATER:
+    rho = liquid_density(entry)
+    if density >= rho:
         return f"{mass:.3g} kg · sinks"
-    return f"{mass:.3g} kg · floats ~{density / floaters.RHO_WATER * 100:.0f}% submerged"
+    return f"{mass:.3g} kg · floats ~{density / rho * 100:.0f}% submerged"
 
 
 # ---------------------------------------------------------------------------
@@ -269,12 +280,12 @@ def keyed(entry):
     return [o for o in bpy.data.objects if o.get(WATER_PROP) == entry.uuid]
 
 
-def clear_water(assembly_uuid):
+def clear_water(assembly_uuid, objects=None):
     """Remove the keys a liquid setup's bake gave its floaters (they stay
-    floating objects)."""
+    floating objects).  `objects` limits it to one scene's copy of the setup."""
     from ..level2 import floaters
     n = 0
-    for obj in list(bpy.data.objects):
+    for obj in list(bpy.data.objects if objects is None else objects):
         if obj.get(WATER_PROP) == assembly_uuid:
             floaters.clear(obj)
             del obj[WATER_PROP]
@@ -298,6 +309,11 @@ def _wave_params(entry, dom):
     bottom = dom.matrix_world.translation.z - sw.object_dims(dom).z / 2
     return dict(wave_number=so.wave_number(entry.wave_period, water),
                 rest_level=bottom + water)
+
+
+def _body_params(entry, dom):
+    """What the setup's liquid tells floaters.Body."""
+    return dict(_wave_params(entry, dom), liquid_density=liquid_density(entry))
 
 
 def pushes_water(entry, scene=None):
@@ -332,7 +348,7 @@ def bake_one_way(context, entry):
     wm.progress_begin(0, max(last - first, 1))
     t = time.perf_counter()
     try:
-        floaters.bake(scene, dom, objs, first, last, params=_wave_params(entry, dom),
+        floaters.bake(scene, dom, objs, first, last, params=_body_params(entry, dom),
                       progress=_progress(wm, first))
     finally:
         wm.progress_end()
@@ -365,7 +381,7 @@ def bake_coupled(context, entry, report):
     from ..level2 import floaters
     from ..level2 import still_water as sw
     from ..level2 import simulated_ocean
-    from . import whitewater
+    from . import presets, whitewater
     scene = context.scene
     dom = domain_of(entry)
     objs = [o for o in floaters_of(entry, scene) if eligible(o)[0]]
@@ -378,6 +394,7 @@ def bake_coupled(context, entry, report):
         floaters.clear(obj)
     sync(scene)
     # What Bake Liquid does before it bakes.
+    presets.refresh_liquid(entry)
     sw.sync_flows(entry)
     whitewater.apply(entry)
     if entry.mode == C.MODE_SIMOCEAN and not simulated_ocean.is_legacy(entry):
@@ -401,7 +418,7 @@ def bake_coupled(context, entry, report):
         dom.hide_set(False)
     t = time.perf_counter()
     try:
-        with floaters.CoupledBake(scene, dom, objs, params=_wave_params(entry, dom),
+        with floaters.CoupledBake(scene, dom, objs, params=_body_params(entry, dom),
                                   progress=_progress(wm, first)):
             with sw._fluid_op_override(context, dom):
                 bpy.ops.fluid.bake_all("EXEC_DEFAULT")

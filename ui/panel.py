@@ -5,7 +5,7 @@ import bpy
 
 from .. import constants as C
 from ..core import registry, delete, errors, bakes
-from ..core import presets, whitewater
+from ..core import liquids, presets, whitewater
 from . import beta, control_spec
 from ..level1 import ocean as ocean_mod
 
@@ -20,7 +20,7 @@ class AQS_OT_assembly_delete(bpy.types.Operator):
     uuid: bpy.props.StringProperty()
     delete_cache: bpy.props.BoolProperty(
         name="Also delete bake files",
-        default=False,
+        default=False, options={"SKIP_SAVE"},
         description="Remove this assembly's bake cache folder "
                     "(//aquasuite_cache/<id>) from disk. Undo can't bring "
                     "these files back")
@@ -273,6 +273,14 @@ def _draw_preset(box, entry):
     sub.enabled = entry.preset_choice != 'CUSTOM'
     op = sub.operator('aquasuite.apply_preset', text='Apply')
     op.uuid = entry.uuid
+    liquid = presets.CATALOG.get(entry.preset_id, {}).get('liquid')
+    if liquid:
+        info = col.column(align=True)
+        info.enabled = False
+        info.label(text=liquids.describe(liquid))
+        _dom, ds = presets.domain(entry)
+        if entry.show_advanced and ds is not None:
+            info.label(text=liquids.solver_note(entry, ds))
 
 
 def _draw_whitewater(box, entry):
@@ -333,7 +341,7 @@ def _draw_spec(box, context, entry):
         # Keep Cancel/Bake live, but do not alter a running simulation through
         # a preset button or one of the grouped advanced controls.
         box = root.column()
-        box.enabled = not baking or control in ('bake', 'ripples', 'hose_liquid_controls')
+        box.enabled = not baking or control in ('bake', 'ripples', 'hose_liquid_controls', 'hose_bake')
         if control.startswith(('entry:', 'ocean:', 'particles:')):
             # Label on the left, value on the right: easier to scan.
             box.use_property_split = True
@@ -360,11 +368,15 @@ def _draw_spec(box, context, entry):
             if 'fluid' not in control_spec.controls(entry.mode, entry.show_advanced):
                 _draw_resolution_buttons(box, entry)
         elif control == 'ripples':
-            _draw_bake(box, entry, 'aquasuite.bake_ripples', mandatory=False)
+            _draw_bake(box, entry, 'aquasuite.bake_ripples', 'aquasuite.free_ripples', mandatory=False)
         elif control == 'regimes':
             _draw_regimes(box, entry)
         elif control == 'hose_liquid_controls':
             _draw_hose_liquid(box, entry, context)
+        elif control == 'hose_bake':
+            # Advanced draws it with the other liquid controls.
+            if entry.hose_liquid and entry.regime != C.REGIME_MIST and not entry.show_advanced:
+                _draw_bake(box, entry, 'aquasuite.bake_fluid', 'aquasuite.free_liquid')
         elif control == 'pools':
             row = box.row(align=True)
             row.label(text=f'Pool meshes: {len(entry.pool_sources)}')
@@ -466,7 +478,7 @@ def _draw_floating(box, context, entry):
             sub.enabled = s.use_mass
             sub.prop(s, "mass")
         found = floating.warnings(obj, entry)
-        note = "" if found else floating.buoyancy_note(obj)
+        note = "" if found else floating.buoyancy_note(obj, entry)
         if note:
             sub = col.row()
             sub.enabled = False
@@ -511,9 +523,9 @@ def _draw_floating(box, context, entry):
 
 def _draw_regimes(box, entry):
     row = box.row(align=True)
-    for rid, label, _desc in C.REGIME_ITEMS:
+    for rid, _label, _desc in C.REGIME_ITEMS:
         op = row.operator("aquasuite.hose_set_regime",
-                          text=label.split()[0],
+                          text=C.REGIME_BUTTONS[rid],
                           depress=(entry.regime == rid))
         op.uuid = entry.uuid
         op.regime = rid

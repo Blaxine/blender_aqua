@@ -49,11 +49,7 @@ def assign(obj, mat):
     mats.append(mat)
 
 
-def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
-    mat = _new_mat(name, mode, uuid_)
-    _water_refraction(mat)
-    nt = mat.node_tree
-    nt.nodes.clear()
+def _water_nodes(nt, volume=True):
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     glass = nt.nodes.new("ShaderNodeBsdfGlass")
     _pset(glass, ("IOR",), 1.33)
@@ -65,11 +61,88 @@ def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
         _pset(absorb, ("Color",), (0.45, 0.72, 0.78, 1.0))
         _pset(absorb, ("Density",), 0.35)
         nt.links.new(absorb.outputs[0], out.inputs["Volume"])
+
+
+def water_surface(mode, uuid_, name="AQS_MAT_OceanSurface", volume=True):
+    mat = _new_mat(name, mode, uuid_)
+    _water_refraction(mat)
+    nt = mat.node_tree
+    nt.nodes.clear()
+    _water_nodes(nt, volume)
     try:
         mat.use_screen_refraction = True  # EEVEE hint (§13.1)
     except AttributeError:
         pass
     return mat
+
+
+LOOK_PROP = "aqs_look"     # which liquid the material is built for; none = water
+
+
+def _clear_nodes(nt, look):
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    glass = nt.nodes.new("ShaderNodeBsdfGlass")
+    _pset(glass, ("IOR",), look["ior"])
+    _pset(glass, ("Roughness",), 0.02)
+    nt.links.new(glass.outputs[0], out.inputs["Surface"])
+    absorb = nt.nodes.new("ShaderNodeVolumeAbsorption")
+    _pset(absorb, ("Color",), (*look["color"], 1.0))
+    absorb["aqs_look_absorption"] = True
+    nt.links.new(absorb.outputs[0], out.inputs["Volume"])
+
+
+def _opaque_nodes(nt, look):
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf["aqs_look_bsdf"] = True
+    _pset(bsdf, ("Base Color",), (*look["color"], 1.0))
+    _pset(bsdf, ("Roughness",), look["roughness"])
+    _pset(bsdf, ("Subsurface Weight", "Subsurface"), look["subsurface"])
+    if "specular" in look:
+        _pset(bsdf, ("Specular IOR Level", "Specular"), look["specular"])
+    nt.links.new(bsdf.outputs[0], out.inputs["Surface"])
+    if look.get("bumps"):
+        geometry = nt.nodes.new("ShaderNodeNewGeometry")
+        noise = nt.nodes.new("ShaderNodeTexNoise")
+        noise["aqs_look_bumps"] = True
+        _pset(noise, ("Detail",), 4.0)
+        bump = nt.nodes.new("ShaderNodeBump")
+        bump["aqs_look_bump"] = True
+        nt.links.new(geometry.outputs["Position"], noise.inputs["Vector"])
+        nt.links.new(noise.outputs[0], bump.inputs["Height"])
+        nt.links.new(bump.outputs[0], bsdf.inputs["Normal"])
+
+
+def set_liquid_look(mat, key, look, size, reference):
+    """Rebuild the material only when the liquid changes, so edits to it
+    survive re-applying the same preset.  Colour depth, lumps and subsurface
+    follow the mesh size, to read the same on a big or small mesh."""
+    if not mat.use_nodes:
+        return
+    nt = mat.node_tree
+    if mat.get(LOOK_PROP, "WATER") != key:
+        nt.nodes.clear()
+        if look is None:
+            _water_nodes(nt)
+        elif look["kind"] == "CLEAR":
+            _clear_nodes(nt, look)
+        else:
+            _opaque_nodes(nt, look)
+        mat[LOOK_PROP] = key
+        # What Solid view shows: glass has no colour of its own there.
+        mat.diffuse_color = (*look["color"], 1.0) if look else (0.8, 0.8, 0.8, 1.0)
+    if look is None:
+        return
+    size = max(size, 1e-3)
+    for node in nt.nodes:
+        if node.get("aqs_look_absorption"):
+            _pset(node, ("Density",), look["absorption"] * reference / max(size, reference))
+        elif node.get("aqs_look_bumps"):
+            _pset(node, ("Scale",), look["bumps"] / size)
+        elif node.get("aqs_look_bump"):
+            _pset(node, ("Distance",), 0.03 * size)
+        elif node.get("aqs_look_bsdf"):
+            _pset(node, ("Subsurface Scale",), 0.1 * size)
 
 
 def droplet(mode, uuid_):

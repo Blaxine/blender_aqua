@@ -9,8 +9,16 @@ Blender 4.2+ extension: name, version and requirements live in
 blender_manifest.toml (the single source of the add-on version).
 """
 
+import sys
+
 import bpy
 from bpy.props import CollectionProperty, EnumProperty, PointerProperty
+
+# Installing over a version that was loaded and then turned off in this Blender
+# session re-runs only this file: its submodules would stay the old version's.
+for _name in [n for n in sys.modules if n.startswith(__name__ + ".")]:
+    del sys.modules[_name]
+    globals().pop(_name[len(__name__) + 1:], None)
 
 from . import constants as C
 from .core import registry, handlers, quality, errors, bakes, obstacles, floating

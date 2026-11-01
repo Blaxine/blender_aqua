@@ -659,11 +659,11 @@ class AQS_OT_rain_sim_create(bpy.types.Operator):
     bl_idname = "aquasuite.rain_sim_create"
     bl_label = "Create Rain Simulation"
     bl_description = ("Real Mantaflow rain: drops splash and ripple in pool "
-                      "water (opens a setup menu)")
+                      "water")
     bl_options = {"REGISTER", "UNDO"}
 
     preset: bpy.props.EnumProperty(name="Preset", items=presets.ITEMS[C.MODE_SIMRAIN],
-                                   default='RAIN_RAIN')
+                                   default='RAIN_RAIN', options={'SKIP_SAVE'})
 
     area: bpy.props.FloatProperty(
         name="Rain Area", default=4.0, min=1.0, max=30.0, subtype="DISTANCE",
@@ -796,6 +796,10 @@ class AQS_OT_rain_sim_add_pool(bpy.types.Operator):
         if any(m.type == "FLUID" for m in src.modifiers):
             self.report({"ERROR"},
                         "AQS-W021: " + C.MSG["W021"].format(names=src.name))
+            return {"CANCELLED"}
+        why = sw.source_problem(src)
+        if why:
+            self.report({"ERROR"}, f"'{src.name}' can't become water: {why}")
             return {"CANCELLED"}
         if sw.mesh_has_open_edges(src):
             self.report({"WARNING"}, "AQS-W012: " + C.MSG["W012"])

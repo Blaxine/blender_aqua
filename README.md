@@ -132,7 +132,7 @@ This implementation is ready for manual review; preset appearance, whitewater
 renders and wave-tank behaviour still need acceptance checks. Automated functional
 checks are deferred until after that review.
 
-Liquid Create dialogs offer editable presets. The assembly's **Preset → Apply**
+Liquid setups start from an editable preset. The assembly's **Preset → Apply**
 row applies another starting point later. Settings are saved in the .blend;
 future catalogue changes do not rewrite them. Editing a preset-owned value shows
 **(modified)**. Apply resets that marker. Applying a preset does not delete your
@@ -140,10 +140,17 @@ cache files: **Bake Again** to update the result.
 
 | Mode | Presets |
 | --- | --- |
-| Still Water | Calm Pour, Splashy, Thick |
+| Still Water | Water, Syrup, Oil, Chocolate, Thick Cream, Cream, Oatmeal, Honey, then Calm Pour, Splashy, Thick |
 | Rain Sim | Drizzle, Rain, Storm |
 | Hose → Simulate Liquid | Garden, Fire Hose, Sprinkler |
 | Ocean (Simulated) | Calm, Rolling Waves, Storm Surf |
+
+Still Water's real liquids set their own viscosity and material. Viscosity comes
+from the liquid's real figures (shown under the preset) and the size of your mesh:
+any mesh flows like a 10 cm pour of that liquid, so honey looks like honey whether
+the mesh is a spoonful or a 2 m cube. The calculation runs again before each bake if the mesh
+or domain changed size; a viscosity you set yourself is kept. Thick liquids move slowly, so
+lengthen **Bake End** to see them settle. Viscous bakes take about 2.5x longer.
 
 **Whitewater** gives Spray, Foam and Bubbles their own enable switch, Amount and
 Size in metres. Draft suspends them and keeps the checkboxes for later. Amount 0
@@ -289,6 +296,8 @@ final bake, cancel (Esc), lower Resolution one notch, and re-bake —
 liquid at 200+ resolution can genuinely need many GB of RAM.
 
 ## What's in this version
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in this release.
 
 - Eight modes, including the new simulated-ocean preview; every setup records
   the version that made it. Feature validation is tracked in `docs/PRESET_REVIEW.md`.

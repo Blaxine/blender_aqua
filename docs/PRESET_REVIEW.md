@@ -1,4 +1,4 @@
-# Preset manual review (current preview: 0.20.0)
+# Preset manual review (current release: 0.22.0)
 
 ## 0.20.0 changes to review — 2026-10-20
 
@@ -96,7 +96,9 @@ still required. 0.18.0 also raises Calm and Rolling Waves to resolution 160
 2. Create a raised cube → Still Water → Splashy. Save, use a short bake range,
    bake, then render in Cycles and EEVEE. Check for liquid and foam. Toggle foam
    off/on and re-bake each time; it should return with a render instance.
-3. Try Calm Pour and Thick. Change Resolution or an Amount: the label should say
+3. Try each real liquid on a raised cube (Water, Syrup, Oil, Chocolate, Thick
+   Cream, Cream, Oatmeal, Honey): bake and render. Each should flow and look like its
+   name, on a small and on a large mesh. Then try Calm Pour and Thick. Change Resolution or an Amount: the label should say
    modified. Apply again: it should clear. Check that Apply retains cache files
    and that you can re-bake through the normal controls.
 4. Toggle Spray/Foam/Bubbles independently and change Amount/Size. Draft should

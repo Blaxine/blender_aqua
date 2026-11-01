@@ -6,7 +6,7 @@ included in the extension zip.)
 
 Version under test: `________`  Date: `________`
 
-## Feature review gate (introduced in 0.18.0; still open in 0.20.0)
+## Feature review gate (introduced in 0.18.0; still open in 0.22.0)
 
 Automated checks for several of these exist (see the coverage table in
 [PRESET_REVIEW.md](PRESET_REVIEW.md)); a box is ticked only when the check was
@@ -16,7 +16,7 @@ waves travel (S020 in [REMAINING_WORK.md](REMAINING_WORK.md)); the ocean items
 below still need a 5.1 run and a look at the renders.
 
 - [ ] Complete [the preset manual review](PRESET_REVIEW.md) in Blender 5.1.
-- [ ] All twelve presets produce distinct, usable baked results.
+- [ ] All twenty presets produce distinct, usable baked results.
 - [ ] Whitewater renders in Cycles and EEVEE after off/on and Draft transitions.
 - [ ] Cryptomatte and all four AOV masks separate the intended elements.
 - [ ] Simulated-ocean waves propagate, hit an obstacle, and differ by preset.
@@ -44,12 +44,12 @@ below still need a 5.1 run and a look at the renders.
 
 - [ ] Ocean: create, attach a floater (cube), play — it bobs and tilts; delete restores the cube
 - [ ] Rain: create, play — streaks point along the fall, also with wind (particle Object Align X)
-- [ ] Reactive Rain: create, play, Bake Ripples — ripples appear on the floor
+- [ ] Reactive Rain: create, play, Bake Ripples — ripples appear on the floor; change Count and Bake Again — the ripples change; Free removes them
 - [ ] Snow: create, play — seven flake shapes tumble down
 - [ ] Still Water (Beta): Beta note appears on the first create only; bake (Draft) — liquid appears
 - [ ] Water Hose: no Beta note; press Play — Normal is a **thin stream along the nozzle's aim**, Spray a broken-up cone, Blast a long fast jet, Mist a fog cone; all render (F12) and Water Color tints them
 - [ ] Hose aimed at a floor + wall in **Water Obstacles**: the water hits them and slides along; a Collision object **not** in the collection is ignored
-- [ ] Hose → Simulate Liquid (Beta): bake (Draft) — liquid appears along the aim; turn it off — the jet is back
+- [ ] Hose → Simulate Liquid (Beta): bake (Draft) — liquid appears along the aim; Fewer Settings still shows Bake; turn it off — the jet is back
 - [ ] Water obstacles row (＋ / −): add a cube from each liquid box; remove it, or unlink it in the Outliner — its added modifiers disappear, your own Collision stays
 - [ ] Rain Sim (Beta): Beta note on first create; add a pool mesh; bake — splashes and ripples in the pool; rendered drops are thin and end at the water
 - [ ] Rain Sim at Angle 45°: streaks lean along the direction of fall

@@ -157,6 +157,21 @@ def sync(scene):
     return len(objs)
 
 
+def prune(scene):
+    """Remove the collection when it is empty and nothing needs it: every hose
+    limits its particles to it, so the hose creates it even with no obstacles."""
+    col = collection(scene)
+    if col is None or col.objects or col.children or not col.get("aqs_obstacles"):
+        return
+    if any(e.mode == C.MODE_HOSE for e in scene.aqs_assemblies):
+        return
+    if any(s != scene and getattr(s, "aqs_obstacles", None) == col for s in bpy.data.scenes):
+        return
+    scene.aqs_obstacles = None
+    bpy.data.collections.remove(col)
+    _cache[scene.name] = frozenset()
+
+
 def add(scene, objs):
     """Add objects; returns (added names, [(name, reason)] skipped)."""
     col = collection(scene, create=True)

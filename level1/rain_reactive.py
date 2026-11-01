@@ -143,6 +143,39 @@ class AQS_OT_rain_reactive_create(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _ripple_surface(entry):
+    floor = entry.primary if entry else None
+    mod = next((m for m in floor.modifiers if m.type == "DYNAMIC_PAINT"), None) if floor else None
+    surf = mod.canvas_settings.canvas_surfaces[0] if mod and mod.canvas_settings else None
+    return floor, surf
+
+
+def _free_cache(context, floor, surf):
+    with context.temp_override(active_object=floor, object=floor,
+                               point_cache=surf.point_cache):
+        bpy.ops.ptcache.free_bake()
+
+
+class AQS_OT_free_ripples(bpy.types.Operator):
+    bl_idname = "aquasuite.free_ripples"
+    bl_label = "Free Ripple Bake"
+    bl_description = "Delete the baked ripples"
+    bl_options = {"REGISTER", "UNDO"}
+
+    uuid: bpy.props.StringProperty()
+
+    def execute(self, context):
+        floor, surf = _ripple_surface(registry.get(context.scene, self.uuid))
+        if surf is None:
+            self.report({"ERROR"}, "No ripple canvas found")
+            return {"CANCELLED"}
+        if surf.point_cache.is_baking:
+            self.report({"WARNING"}, "Press Esc to stop the bake first")
+            return {"CANCELLED"}
+        _free_cache(context, floor, surf)
+        return {"FINISHED"}
+
+
 class AQS_OT_bake_ripples(bpy.types.Operator):
     bl_idname = "aquasuite.bake_ripples"
     bl_label = "Bake Ripples"
@@ -151,16 +184,16 @@ class AQS_OT_bake_ripples(bpy.types.Operator):
     uuid: bpy.props.StringProperty()
 
     def execute(self, context):
-        entry = registry.get(context.scene, self.uuid)
-        floor = entry.primary if entry else None
+        floor, surf = _ripple_surface(registry.get(context.scene, self.uuid))
         if floor is None:
             return {"CANCELLED"}
-        mod = next((m for m in floor.modifiers if m.type == "DYNAMIC_PAINT"), None)
-        surf = mod.canvas_settings.canvas_surfaces[0] if mod and mod.canvas_settings else None
         if surf is None:
             self.report({"ERROR"}, "No ripple canvas found")
             return {"CANCELLED"}
         try:
+            # Blender skips a cache that is already baked.
+            if surf.point_cache.is_baked:
+                _free_cache(context, floor, surf)
             with context.temp_override(active_object=floor, object=floor,
                                        point_cache=surf.point_cache):
                 # A background job (progress bar, Esc stops it); blocking
@@ -182,4 +215,4 @@ class AQS_OT_bake_ripples(bpy.types.Operator):
         return {"FINISHED"}
 
 
-CLASSES = (AQS_OT_rain_reactive_create, AQS_OT_bake_ripples)
+CLASSES = (AQS_OT_rain_reactive_create, AQS_OT_bake_ripples, AQS_OT_free_ripples)

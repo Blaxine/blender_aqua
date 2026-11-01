@@ -5,6 +5,7 @@ and Plane Ocean floaters whose waterline comes from a density."""
 
 import os
 import sys
+import types
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -41,16 +42,16 @@ def _fake_keys(obj, uuid, dz=0.3):
     obj[floating.WATER_PROP] = uuid
 
 
-def _tank():
-    """A Still Water setup (not baked) around the origin; returns its uuid."""
-    water = lib.add_cube(location=(0, 0, 0.5), name="WaterBlock")
+def _tank(preset="STILL_CALM", x=0.0):
+    """A Still Water setup (not baked) at x; returns its uuid."""
+    water = lib.add_cube(location=(x, 0, 0.5), name="WaterBlock")
     water.scale = (3.0, 3.0, 1.0)
     bpy.context.view_layer.update()
     lib.make_active(water)
-    bpy.ops.aquasuite.still_water_create(preset="STILL_CALM")
+    bpy.ops.aquasuite.still_water_create(preset=preset)
     e = lib.entry(lib.last_uuid())
     dom = sw.find_domain_object(e)
-    dom.location, dom.scale = (0, 0, 1.0), (3.0, 3.0, 2.0)
+    dom.location, dom.scale = (x, 0, 1.0), (3.0, 3.0, 2.0)
     bpy.context.view_layer.update()
     return e.uuid
 
@@ -225,6 +226,155 @@ def test_panel_draws():
                       and "floating" in control_spec.controls(mode, True))
 
 
+def _settle(rho_body, rho_liquid, seconds=8.0, fps=24):
+    """A 0.5 m cube on flat liquid up to z = 1 (no bake): the settled body."""
+    tank = types.SimpleNamespace(lo=np.array((-1.5, -1.5, 0.0)), hi=np.array((1.5, 1.5, 2.0)), cell=0.05)
+    cube = lib.add_cube(location=(0, 0, 1.0), size=0.5, name="Settle")
+    body = fl.Body(cube, density=rho_body, params=dict(liquid_density=rho_liquid))
+    plane = fl.Plane(0.0, 0.0, 1.0, wet=True)
+    for _f in range(int(seconds * fps)):
+        fl.advance([body], [(plane, plane)], tank, 1.0 / fps)
+    body.bottom = float((body.hull @ body.rotation().T + body.x)[:, 2].min())
+    bpy.data.objects.remove(cube)
+    return body
+
+
+def test_liquid_density_from_the_setup():
+    uid = _tank()
+    lib.check("no setup: water", floating.liquid_density(None) == fl.RHO_WATER)
+    for key, package in presets.CATALOG.items():
+        if "liquid" not in package:
+            lib.entry(uid).preset_id = key
+            lib.check(f"{key}: water", floating.liquid_density(lib.entry(uid)) == fl.RHO_WATER)
+    lib.entry(uid).preset_id = ""
+    lib.check("no preset: water", floating.liquid_density(lib.entry(uid)) == fl.RHO_WATER)
+    bpy.ops.aquasuite.assembly_delete(uuid=uid)
+    for key, rho in (("WATER", 1000.0), ("OIL", 915.0), ("HONEY", 1420.0)):
+        uid = _tank(f"STILL_{key}", 10.0)
+        got = floating.liquid_density(lib.entry(uid))
+        lib.check(f"{key} preset: density {rho:.0f}", got == rho, f"{got}")
+        bpy.ops.aquasuite.assembly_delete(uuid=uid)
+
+
+def test_note_follows_the_liquid():
+    oil, honey, water = (_tank(f"STILL_{k}", x) for k, x in
+                         (("OIL", 10.0), ("HONEY", 20.0), ("WATER", 30.0)))
+    box = lib.add_cube(location=(10, 0, 1.2), size=0.5, name="NoteBox")
+    s = box.aqs_float
+
+    def note(uid):
+        return floating.buoyancy_note(box, lib.entry(uid))
+
+    s.material = "ICE"
+    lib.check("ice floats in water", note(water).endswith("floats ~92% submerged"), note(water))
+    lib.check("ice sinks in oil (917 against 915)", note(oil).endswith("sinks"), note(oil))
+    s.material = "RUBBER"
+    lib.check("rubber sinks in water", note(water).endswith("sinks"), note(water))
+    lib.check("rubber floats in honey (1100 against 1420)",
+              note(honey).endswith("floats ~77% submerged"), note(honey))
+    s.material = "WOOD"
+    lib.check("wood sits higher in honey than in water",
+              note(honey).endswith("floats ~42% submerged")
+              and note(water).endswith("floats ~60% submerged"), note(honey))
+    s.material = "ICE"
+    _select(box)
+    bpy.ops.aquasuite.floating_add()
+    log = []
+    panel._draw_floating(_Layout(log), bpy.context, lib.entry(oil))
+    labels = [x[1] for x in log if x[0] == "label"]
+    lib.check("the panel's note uses the tank's liquid",
+              any(t.endswith("· sinks") for t in labels), str(labels))
+    _select(box)
+    bpy.ops.aquasuite.floating_remove()
+    bpy.data.objects.remove(box)
+    for uid in (oil, honey, water):
+        bpy.ops.aquasuite.assembly_delete(uuid=uid)
+
+
+def test_physics_follows_the_liquid():
+    tol = 0.01
+    ice_oil = _settle(917.0, 915.0)
+    # Only 2 kg/m^3 of difference: it goes under, then drifts down at the
+    # speed where linear drag balances it, 2 g / (915 x 5) = 4.3 mm/s.
+    lib.check("ice sinks in oil (917 against 915): fully under, still going down",
+              abs(ice_oil.vsub / ice_oil.volume - 1.0) < 1e-6
+              and abs(ice_oil.v[2] + 2 * fl.GRAVITY / (915.0 * 5.0)) < 1e-3,
+              f"{ice_oil.vsub / ice_oil.volume:.3f}, speed {ice_oil.v[2]:.4f}")
+    ice_water = _settle(917.0, 1000.0)
+    lib.check("ice floats ~92% deep in water", abs(ice_water.vsub / ice_water.volume - 0.917) < 0.03,
+              f"{ice_water.vsub / ice_water.volume:.3f}")
+    rubber_water = _settle(1100.0, 1000.0)
+    lib.check("rubber sinks to the floor in water", abs(rubber_water.bottom) < tol,
+              f"bottom {rubber_water.bottom:.3f}")
+    rubber_honey = _settle(1100.0, 1420.0)
+    frac = rubber_honey.vsub / rubber_honey.volume
+    lib.check("rubber floats ~77% deep in honey", abs(frac - 1100.0 / 1420.0) < 0.03
+              and rubber_honey.bottom > 0.5, f"{frac:.3f}, bottom {rubber_honey.bottom:.3f}")
+
+
+def test_physics_water_is_the_default():
+    """A body told nothing and one told water behave identically, bit for bit."""
+    tank = types.SimpleNamespace(lo=np.array((-1.5, -1.5, 0.0)), hi=np.array((1.5, 1.5, 2.0)), cell=0.05)
+    cube = lib.add_cube(location=(0, 0, 1.3), size=0.5, name="Same")
+    cube.rotation_euler = (0.2, 0.1, 0.0)
+    bpy.context.view_layer.update()
+    plain = fl.Body(cube, density=600.0)
+    water = fl.Body(cube, density=600.0, params=dict(liquid_density=1000.0))
+    plane = fl.Plane(0.0, 0.0, 1.0, 0.05, -0.02, np.array((0.1, 0.0, 0.05)), True)
+    for _f in range(48):
+        fl.advance([plain, water], [(plane, plane)] * 2, tank, 1.0 / 24)
+    lib.check("water setups stay at exactly 1000", plain.p["liquid_density"] == 1000.0)
+    lib.check("same path with or without the parameter",
+              (plain.x == water.x).all() and (plain.q == water.q).all() and (plain.v == water.v).all())
+    bpy.data.objects.remove(cube)
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_both_bakes_get_the_density():
+    """The two drivers build their bodies from the setup's liquid.  Stops
+    before anything is baked."""
+    e = lib.entry(_tank("STILL_OIL", 10.0))
+    box = lib.add_cube(location=(10, 0, 1.2), size=0.5, name="Driven")
+    _select(box)
+    bpy.ops.aquasuite.floating_add()
+    seen = {}
+
+    def spy_bake(_scene, _dom, _objs, *_a, params=None, **_k):
+        seen["one way"] = params
+
+    class SpyCoupled:
+        def __init__(self, _scene, _dom, _objs, params=None, **_k):
+            seen["coupled"] = params
+            raise _Stop()
+
+    real_bake, real_coupled = fl.bake, fl.CoupledBake
+    fl.bake, fl.CoupledBake = spy_bake, SpyCoupled
+    try:
+        floating.bake_one_way(bpy.context, e)
+        try:
+            floating.bake_coupled(bpy.context, e, lambda *_a: None)
+        except _Stop:
+            pass
+    finally:
+        fl.bake, fl.CoupledBake = real_bake, real_coupled
+    for driver in ("one way", "coupled"):
+        lib.check(f"{driver}: the bake gets oil's density",
+                  seen.get(driver, {}).get("liquid_density") == 915.0, str(seen.get(driver)))
+    dom = sw.find_domain_object(e)
+    params = floating._body_params(e, dom)
+    coupled = fl.CoupledBake(lib.scene(), dom, [box], params=params)
+    lib.check("CoupledBake's bodies carry it", coupled.bodies[0].p["liquid_density"] == 915.0)
+    bodies, _timing = fl.bake(lib.scene(), dom, [box], 1, 1, params=params, write=False)
+    lib.check("bake's bodies carry it", bodies[0].p["liquid_density"] == 915.0)
+    _select(box)
+    bpy.ops.aquasuite.floating_remove()
+    bpy.data.objects.remove(box)
+    bpy.ops.aquasuite.assembly_delete(uuid=e.uuid)
+
+
 def test_clear_free_and_delete_restore():
     e = lib.entry(UID["tank"])
     box = bpy.data.objects[UID["box"]]
@@ -271,11 +421,11 @@ def test_plane_ocean_density():
     lib.check("Plane Ocean floater row draws", ("prop", "material") in log)
 
 
-def _baked_tank(name, res=48, frames=48):
+def _baked_tank(name, res=48, frames=48, preset="STILL_CALM"):
     lib.save_blend(name)
     sc = lib.scene()
     sc.frame_start, sc.frame_end = 1, frames
-    uid = _tank()
+    uid = _tank(preset)
     e = lib.entry(uid)
     ds = presets.domain(e)[1]
     e.base_resolution = res
@@ -337,6 +487,46 @@ def test_bake_floaters_one_way():
     bpy.ops.aquasuite.clear_floaters(uuid=uid)
     lib.check("Clear Floaters removes every key", not floating.keyed(e)
               and not (plank.animation_data and plank.animation_data.action) and not (steel.animation_data and steel.animation_data.action))
+
+
+def _float_in(preset, material, name):
+    """One-way Bake Floaters: a 0.5 m cube of this material in a baked tank of
+    this liquid; returns (cube's height after 72 frames, tank floor, level)."""
+    bpy.ops.wm.read_homefile(use_empty=True)
+    uid = _baked_tank(name, frames=72, preset=preset)
+    e = lib.entry(uid)
+    cube = lib.add_cube(location=(0, 0, 1.13), size=0.5, name="Cube")
+    bpy.context.view_layer.update()
+    _select(cube)
+    bpy.ops.aquasuite.floating_add()
+    cube.aqs_float.material = material
+    bpy.ops.aquasuite.bake_fluid(uuid=uid)
+    r = bpy.ops.aquasuite.bake_floaters(uuid=uid)
+    lib.check(f"{preset}: Bake Floaters keys the cube", r == {"FINISHED"})
+    lib.scene().frame_set(72)
+    dom = sw.find_domain_object(e)
+    tank = fl.Tank(dom)
+    surface = fl.Surface.from_domain(dom, bpy.context.evaluated_depsgraph_get())
+    level = fl.sample_plane(surface, fl.Body(cube), tank, 0.15).h0
+    return cube.matrix_world.translation.z, tank.lo[2], level
+
+
+def test_bake_ice_goes_under_in_oil():
+    if not lib.BAKE:
+        lib.skip("ice in baked oil", "run with --bake")
+        return
+    z, _floor, level = _float_in("STILL_OIL", "ICE", "floating_oil")
+    lib.check("ice goes under the oil's surface (in water 8% stays out)", z + 0.25 < level + 0.02,
+              f"top {z + 0.25:.3f}, level {level:.3f}")
+
+
+def test_bake_rubber_floats_in_honey():
+    if not lib.BAKE:
+        lib.skip("rubber in baked honey", "run with --bake")
+        return
+    z, floor, level = _float_in("STILL_HONEY", "RUBBER", "floating_honey")
+    lib.check("rubber stays up in honey (in water it reaches the floor)",
+              z - 0.25 > floor + 0.1 and z + 0.25 > level, f"z {z:.3f}, floor {floor:.3f}, level {level:.3f}")
 
 
 def test_bake_water_and_floaters():

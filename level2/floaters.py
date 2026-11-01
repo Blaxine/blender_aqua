@@ -6,7 +6,7 @@ pushes objects.  So AquaSuite computes buoyancy itself, frame by frame, from
 the baked liquid surface, and writes the motion as keyframes:
 
 * weight m·g, with m = density × mesh volume (closed meshes only);
-* buoyancy ρ_water·g·V_sub, summed over sample points inside the object, so
+* buoyancy ρ_liquid·g·V_sub, summed over sample points inside the object, so
   the offset between the centre of buoyancy and the centre of mass turns the
   object; the force follows the local surface slope (Froude–Krylov), so
   floaters slide down wave faces;
@@ -50,7 +50,7 @@ from .. import constants as C
 
 RHO_WATER = 1000.0
 GRAVITY = 9.81
-# kg/m^3.  Water is 1000: below floats, above sinks.
+# kg/m^3.  Below the liquid's density floats, above sinks (water is 1000).
 DENSITY_PRESETS = {key: rho for key, _label, rho in C.FLOAT_MATERIALS}
 RESTORE_PROP = "aqs_floater_restore"     # JSON pre-bake transform
 PREV_ACTION_PROP = "aqs_floater_prev_action"
@@ -70,6 +70,7 @@ DEFAULTS = dict(
     use_water_velocity=True,
     wave_number=0.0,       # k of the waves (1/m); 0 = no decay with depth
     rest_level=0.0,        # still water level the decay is measured from
+    liquid_density=RHO_WATER,  # kg/m^3 of what the body floats in
 )
 
 
@@ -431,6 +432,7 @@ def _contacts(body, tank, R, m_eff, Iinv):
 
 def step(body, plane, tank, dt):
     p = body.p
+    rho = p["liquid_density"]
     R = body.rotation()
     r = body.points @ R.T
     P = body.x + r
@@ -452,14 +454,14 @@ def step(body, plane, tank, dt):
     torque = np.zeros(3)
     if body.vsub > 0:
         slope = np.array((-plane.hx, -plane.hy, 0.0)) * decay + np.array((0.0, 0.0, 1.0))
-        fi = RHO_WATER * GRAVITY * wv[:, None] * slope
+        fi = rho * GRAVITY * wv[:, None] * slope
         rel = body.v + np.cross(body.w, r) - plane.u
         speed = np.sqrt((rel ** 2).sum(1))
         coef = p["drag_linear"] + p["drag_quadratic"] * speed / body.length
-        fi = fi - RHO_WATER * (wv * coef)[:, None] * rel
+        fi = fi - rho * (wv * coef)[:, None] * rel
         force += fi.sum(0)
         torque += np.cross(r, fi).sum(0)
-    grow = 1.0 + p["added_mass"] * RHO_WATER * body.vsub / body.mass
+    grow = 1.0 + p["added_mass"] * rho * body.vsub / body.mass
     m_eff = body.mass * grow
     Iw = R @ body.inertia @ R.T * grow
     Iinv = R @ body.inertia_inv @ R.T / grow

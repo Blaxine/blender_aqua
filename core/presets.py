@@ -8,10 +8,11 @@ import bpy
 from bpy.app.handlers import persistent
 
 from .. import constants as C
-from . import registry
+from . import liquids, registry
 
 LIQUID_MODES = (C.MODE_STILL, C.MODE_SIMRAIN, C.MODE_HOSE, C.MODE_SIMOCEAN)
 _applying = set()
+_LIQUID_FIELDS = ('use_viscosity', 'viscosity_value')
 
 
 def _package(mode, label, resolution=96, draft=True, foam=0.0, spray=0.0,
@@ -27,6 +28,18 @@ def _package(mode, label, resolution=96, draft=True, foam=0.0, spray=0.0,
         'use_diffusion': False, 'surface_tension': tension,
         'use_flip_particles': True, 'flip_ratio': flip,
         'particle_radius': 1.0, 'particle_randomness': 0.1})
+
+
+def _liquid(key):
+    """A real liquid.  Its viscosity depends on the mesh size, so it is
+    calculated when the preset is applied (and again before each bake)."""
+    package = _package(C.MODE_STILL, liquids.LIQUIDS[key]['label'], draft=False,
+                       flip=liquids.flip_ratio(key))
+    del package['domain']['use_viscosity'], package['domain']['viscosity_value']
+    package['domain']['particle_radius'] = liquids.particle_radius(key)
+    package['liquid'] = key
+    package['description'] = liquids.describe(key)
+    return package
 
 
 CATALOG = {
@@ -65,13 +78,17 @@ CATALOG = {
                            # 0.9 m needs a long period to stay below the
                            # breaking limit (at 1.5 s it broke where it was made).
                            wave_period=2.8, tank_size=(20.0, 8.0, 4.0)),
+    # New presets go at the end: saved files store each enum's position number.
+    **{liquids.preset_id(key): _liquid(key) for key in liquids.LIQUIDS},
 }
-DEFAULTS = {C.MODE_STILL: 'STILL_CALM', C.MODE_SIMRAIN: 'RAIN_RAIN',
+DEFAULTS = {C.MODE_STILL: liquids.preset_id('WATER'), C.MODE_SIMRAIN: 'RAIN_RAIN',
             C.MODE_HOSE: 'HOSE_GARDEN', C.MODE_SIMOCEAN: 'OCEAN_ROLLING'}
 # Keep enum strings and lists alive for Blender's dynamic-enum API.
-ITEMS = {mode: [(key, p['label'], 'Apply an editable starting point', i + 1)
+ITEMS = {mode: [(key, p['label'], p.get('description', 'Apply an editable starting point'), i + 1)
                 for i, (key, p) in enumerate(CATALOG.items()) if p['mode'] == mode]
          for mode in LIQUID_MODES}
+# The menu lists the real liquids first, whatever their position number.
+ITEMS[C.MODE_STILL].sort(key=lambda item: 'liquid' not in CATALOG[item[0]])
 CHOICES = {mode: [('CUSTOM', 'Custom', 'No preset selected', 0)] + items
            for mode, items in ITEMS.items()}
 CUSTOM_ITEMS = [('CUSTOM', 'Custom', 'No preset selected', 0)]
@@ -219,6 +236,11 @@ def apply(context, entry, preset_id):
                 set_flag(ds, name, value)
             else:
                 setattr(ds, name, value)
+        liquid = package.get('liquid')
+        if liquid:
+            liquids.apply_physics(entry, ds, liquid)
+        if entry.mode == C.MODE_STILL:
+            liquids.apply_look(entry, liquid or 'WATER')
         whitewater.apply(entry, force=True)
         fields = {'entry': list(package['entry']), 'domain': list(package['domain']) + [
             'resolution_max', 'mesh_scale', 'use_spray_particles', 'use_foam_particles',
@@ -226,12 +248,33 @@ def apply(context, entry, preset_id):
             'sndparticle_sampling_trappedair', 'sndparticle_potential_min_wavecrest',
             'sndparticle_potential_max_wavecrest', 'sndparticle_potential_min_trappedair',
             'sndparticle_potential_max_trappedair', 'sndparticle_potential_min_energy',
-            'sndparticle_potential_max_energy']}
+            'sndparticle_potential_max_energy'] + list(_LIQUID_FIELDS if liquid else ())}
         entry.preset_snapshot = json.dumps(snapshot(entry, fields), sort_keys=True)
         entry.preset_id = preset_id
         entry.preset_label = package['label']
         entry.preset_choice = preset_id
         entry.preset_modified = False
+
+
+def refresh_liquid(entry):
+    """Before a bake: follow the meshes and domain if they changed size since
+    the preset was applied.  A viscosity the user set by hand is kept."""
+    liquid = CATALOG.get(entry.preset_id, {}).get('liquid')
+    _obj, ds = domain(entry)
+    if not liquid or ds is None:
+        return
+    liquids.apply_look(entry, liquid)
+    try:
+        saved = json.loads(entry.preset_snapshot)
+        fields = saved['domain']
+    except (ValueError, TypeError, KeyError):
+        return
+    if any(_value(getattr(ds, name)) != fields.get(name) for name in _LIQUID_FIELDS):
+        return
+    with applying(entry):
+        liquids.apply_physics(entry, ds, liquid)
+        fields.update({name: _value(getattr(ds, name)) for name in _LIQUID_FIELDS})
+        entry.preset_snapshot = json.dumps(saved, sort_keys=True)
 
 
 class AQS_OT_apply_preset(bpy.types.Operator):

@@ -56,7 +56,7 @@ FLOAT_MATERIALS = (
 
 
 def float_material_items(floating_only=False):
-    items = [(key, label, f"{rho:.0f} kg/m³ — " + ("floats" if rho < 1000.0 else "sinks"))
+    items = [(key, label, f"{rho:.0f} kg/m³ — " + ("floats" if rho < 1000.0 else "sinks") + " in water")
              for key, label, rho in FLOAT_MATERIALS if rho < 1000.0 or not floating_only]
     items.append(("CUSTOM", "Custom", "Type the density"))
     return items
@@ -110,6 +110,9 @@ REGIME_ITEMS = [
     (REGIME_SPRAY, "Spray", "Broken-up shower of droplets (real-time)"),
     (REGIME_BLAST, "Water Blast", "High-velocity fire-hose jet (real-time)"),
 ]
+
+REGIME_BUTTONS = {REGIME_NORMAL: "Normal", REGIME_MIST: "Mist",
+                  REGIME_SPRAY: "Spray", REGIME_BLAST: "Blast"}
 
 # Regime parameter packages (R1.9-corrected Blast defaults).
 # Real-time particle jets (Normal / Spray / Blast).  velocity in m/s at

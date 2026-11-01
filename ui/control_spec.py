@@ -14,7 +14,7 @@ SIMPLE = {
     C.MODE_RRAIN: ('particles:count', 'ripples'),
     C.MODE_STILL: ('preset', 'water_sources', 'resolution_buttons', 'obstacles', 'bake', 'floating'),
     C.MODE_SIMRAIN: ('preset', 'entry:rain_density', 'entry:rain_speed', 'entry:rain_angle', 'pools', 'obstacles', 'bake', 'floating'),
-    C.MODE_HOSE: ('regimes', 'entry:pressure', 'entry:spread', 'entry:hose_color', 'obstacles'),
+    C.MODE_HOSE: ('regimes', 'entry:pressure', 'entry:spread', 'entry:hose_color', 'obstacles', 'hose_bake'),
     C.MODE_SIMOCEAN: ('preset', 'entry:wave_height', 'entry:wave_period', 'obstacles', 'bake', 'floating'),
 }
 ADVANCED = {
@@ -26,7 +26,7 @@ ADVANCED = {
     C.MODE_STILL: ('preset', 'water_sources', 'resolution_buttons', 'entry:draft', 'obstacles', 'fluid', 'whitewater', 'bake', 'floating'),
     C.MODE_SIMRAIN: ('preset', 'entry:rain_density', 'entry:rain_speed', 'entry:rain_angle', 'entry:rain_direction', 'entry:rain_area',
                      'entry:drop_size', 'entry:splash_amount', 'entry:rain_seed', 'rain_tools', 'pools', 'obstacles', 'entry:draft', 'fluid', 'whitewater', 'bake', 'floating'),
-    C.MODE_HOSE: ('regimes', 'entry:pressure', 'entry:spread', 'entry:hose_color', 'entry:nozzle_radius', 'obstacles', 'hose_liquid_controls'),
+    C.MODE_HOSE: ('regimes', 'entry:pressure', 'entry:spread', 'entry:hose_color', 'entry:nozzle_radius', 'obstacles', 'hose_liquid_controls', 'hose_bake'),
     C.MODE_SIMOCEAN: ('preset', 'entry:wave_height', 'entry:wave_period',
                      'entry:tank_size', 'entry:draft', 'fluid', 'whitewater', 'obstacles', 'bake', 'floating'),
 }

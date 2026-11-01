@@ -10,7 +10,7 @@ from aquasuite.core import presets, delete
 
 def test_every_preset_produces_liquid():
     if not lib.BAKE:
-        lib.skip('twelve preset bakes', 'run with --bake')
+        lib.skip('preset bakes', 'run with --bake')
         return
     lib.save_blend('preset_smoke')
     scene = lib.scene()

@@ -477,7 +477,7 @@ class AQS_OT_still_water_create(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     preset: bpy.props.EnumProperty(name="Preset", items=presets.ITEMS[C.MODE_STILL],
-                                   default='STILL_CALM')
+                                   default='STILL_WATER', options={'SKIP_SAVE'})
 
     def invoke(self, context, event):
         return self.execute(context)
@@ -499,6 +499,10 @@ class AQS_OT_still_water_create(bpy.types.Operator):
             self.report({"ERROR"},
                         "This object already has a Fluid modifier — AquaSuite "
                         "won't modify existing Fluid setups (AQS-W021).")
+            return {"CANCELLED"}
+        why = source_problem(src)
+        if why:
+            self.report({"ERROR"}, f"'{src.name}' can't become water: {why}")
             return {"CANCELLED"}
         uid = naming.new_uuid()
         col = naming.new_assembly_collection(scene, C.MODE_STILL, uid)
@@ -535,7 +539,7 @@ class AQS_OT_still_water_create(bpy.types.Operator):
 
         context.view_layer.objects.active = dom
         self.report({"INFO"},
-                    "AquaSuite: Still Water created — bake required (amber banner)")
+                    "AquaSuite: Still Water created — bake required")
         return {"FINISHED"}
 
 
@@ -765,6 +769,7 @@ class AQS_OT_bake_fluid(bpy.types.Operator):
                         "regime (Mist is particle-based and needs no bake). "
                         "Switch to Normal, Spray, or Blast first.")
             return {"CANCELLED"}
+        presets.refresh_liquid(entry)
         # Ensure the domain is selectable/visible for the operator.
         # Rebind render instances if Mantaflow recreated any secondary systems.
         whitewater.apply(entry)

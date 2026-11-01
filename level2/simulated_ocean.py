@@ -376,13 +376,32 @@ def upgrade(context, entry):
     return True
 
 
+def restore_timeline(scene, entry):
+    """Deleting the tank that extended the timeline: put it back, unless the
+    user has changed it or another tank still needs it (that tank then takes
+    over restoring it)."""
+    before = entry.get('frame_end_before')
+    if before is None:
+        return
+    _dom, ds = presets.domain(entry)
+    if ds is None or scene.frame_end != ds.cache_frame_end:
+        return
+    for other in scene.aqs_assemblies:
+        if other.mode == C.MODE_SIMOCEAN and other.uuid != entry.uuid:
+            _other, other_ds = presets.domain(other)
+            if other_ds is not None and other_ds.cache_frame_end >= scene.frame_end:
+                other['frame_end_before'] = before
+                return
+    scene.frame_end = before
+
+
 class AQS_OT_simulated_ocean_create(bpy.types.Operator):
     bl_idname = 'aquasuite.simulated_ocean_create'
     bl_label = 'Create Ocean (Simulated)'
     bl_description = 'Beta: a liquid wave tank driven by a wave maker; bake to see waves'
     bl_options = {'REGISTER', 'UNDO'}
     preset: bpy.props.EnumProperty(name='Preset', items=presets.ITEMS[C.MODE_SIMOCEAN],
-                                   default='OCEAN_ROLLING')
+                                   default='OCEAN_ROLLING', options={'SKIP_SAVE'})
 
     def invoke(self, context, event):
         return self.execute(context)
@@ -399,6 +418,7 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
         fps = scene.render.fps / scene.render.fps_base
         ds.cache_frame_start = scene.frame_start
         ds.cache_frame_end = scene.frame_start + round(CACHE_SECONDS * fps) - 1
+        frame_end_before = scene.frame_end
         extended = scene.frame_end < ds.cache_frame_end
         if extended:  # the bake is only played back inside the scene range
             scene.frame_end = ds.cache_frame_end
@@ -413,6 +433,8 @@ class AQS_OT_simulated_ocean_create(bpy.types.Operator):
         _add_wavemaker(col, uid)
         entry = registry.add(scene, C.MODE_SIMOCEAN, uid, primary=dom, root_collection=col)
         entry['tank_origin'] = list(scene.cursor.location)
+        if extended:
+            entry['frame_end_before'] = frame_end_before
         presets.apply(context, entry, self.preset)
         sw.add_effectors(scene, dom, uid)
         sw.sync_flows(entry)

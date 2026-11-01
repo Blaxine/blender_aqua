@@ -59,7 +59,9 @@ def _setting(scene, path):
 def restore(scene, entry):
     if entry.mode != C.MODE_LIGHTING:
         return
-    scene.world = entry.light_previous_world
+    # A world the user chose after adding the lighting stays.
+    if scene.world == entry.light_world:
+        scene.world = entry.light_previous_world
     for path, value in json.loads(entry.light_restore or '{}').items():
         obj, name = _setting(scene, path)
         if obj is not None:

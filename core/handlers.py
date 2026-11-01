@@ -25,6 +25,8 @@ from .. import gerstner
 from ..level1 import ocean as ocean_mod
 
 _error_logged = set()
+_ranges = {}          # scene name -> (frame_start, frame_end) last seen
+_FOLLOW_MODES = (C.MODE_RAIN, C.MODE_RRAIN, C.MODE_SNOW, C.MODE_HOSE)
 
 
 def _subframe_time(scene):
@@ -122,11 +124,71 @@ def aqs_buoy_tick(scene, _depsgraph=None):
                 errors.schedule()
 
 
+def note_range(scene):
+    """Remember the scene's range, so the next change has something to compare."""
+    _ranges.setdefault(scene.name, (scene.frame_start, scene.frame_end))
+
+
+def _follow_range(scene, old):
+    """Real-time emitters that ran for the whole old range run for the new
+    one, at the same rate.  A range the user set on the emitter is theirs."""
+    from . import naming
+    start, end = scene.frame_start, scene.frame_end
+    ratio = (end - start + 1) / max(old[1] - old[0] + 1, 1)
+    for entry in scene.aqs_assemblies:
+        if entry.mode not in _FOLLOW_MODES:
+            continue
+        for ps in bpy.data.particles:
+            if not naming.owned_by(ps, entry.uuid) or "aqs_whitewater_element" in ps.keys():
+                continue
+            if (ps.frame_start, ps.frame_end) != old:
+                continue
+            # Each bound is clamped by the other, so widen before narrowing.
+            if start > ps.frame_end:
+                ps.frame_end = end
+                ps.frame_start = start
+            else:
+                ps.frame_start = start
+                ps.frame_end = end
+            ps.count = max(1, min(round(ps.count * ratio), C.MAX_JET_PARTICLES))
+
+
+@persistent
+def aqs_range_sync(scene, _depsgraph=None):
+    now = (float(scene.frame_start), float(scene.frame_end))
+    old = _ranges.get(scene.name)
+    _ranges[scene.name] = now
+    if old is None or tuple(map(float, old)) == now:
+        return
+    try:
+        _follow_range(scene, tuple(map(float, old)))
+    except Exception as exc:
+        from . import errors
+        errors.record("AquaSuite couldn't follow the timeline", exc)
+        errors.schedule()
+
+
+@persistent
+def _forget_ranges(_dummy=None):
+    _ranges.clear()
+    for scene in bpy.data.scenes:
+        note_range(scene)
+
+
 def register():
     if aqs_buoy_tick not in bpy.app.handlers.frame_change_post:
         bpy.app.handlers.frame_change_post.append(aqs_buoy_tick)
+    if aqs_range_sync not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(aqs_range_sync)
+    if _forget_ranges not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_forget_ranges)
 
 
 def unregister():
     if aqs_buoy_tick in bpy.app.handlers.frame_change_post:
         bpy.app.handlers.frame_change_post.remove(aqs_buoy_tick)
+    if aqs_range_sync in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(aqs_range_sync)
+    if _forget_ranges in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_forget_ranges)
+    _ranges.clear()

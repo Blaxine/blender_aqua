@@ -41,6 +41,8 @@ before introducing it anywhere else.
 | Water Obstacles | The scene's `AQS Water Obstacles` collection: the only rule for what blocks water in every simulation. | AquaSuite adds Collision/Effector as needed and removes exactly that when an object leaves the collection. |
 | Wave table | The fixed Gerstner layer constants shared by the ocean node tree and the buoy handler. | Changing it changes every ocean. |
 | Preset | An editable package applied once to a liquid assembly. | Saved values and a snapshot are independent of future catalogue changes. |
+| Real liquid preset | A Still Water preset for a named liquid (Water, Honey, ...), from its real viscosity and density. | `core/liquids.py`. Its solver viscosity follows the mesh size; its look replaces the setup's own liquid material. |
+| Reference size | 10 cm: the pour every mesh is treated as, when scaling a real liquid's viscosity to the mesh. | Keeps the Galilei number constant. A smaller mesh gets the real viscosity. |
 | Whitewater | Secondary Spray, Foam and Bubbles created by Mantaflow. | Draft suspends them; Amount and render Size are per element. |
 | Render Layers setup | Material Cryptomatte plus AQS_Liquid, AQS_Spray, AQS_Foam and AQS_Bubbles scalar AOVs on the active view layer. | Does not create additional view layers. |
 | Ocean (Simulated) | A Beta liquid wave tank, filled once and driven by a wave maker. | Separate from the procedural Gerstner ocean; no buoy support. |

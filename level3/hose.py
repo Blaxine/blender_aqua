@@ -344,7 +344,7 @@ class AQS_OT_hose_create(bpy.types.Operator):
 
     simulate_liquid: bpy.props.BoolProperty(name="Simulate Liquid (Beta)", default=False)
     preset: bpy.props.EnumProperty(name="Liquid Preset", items=presets.ITEMS[C.MODE_HOSE],
-                                   default='HOSE_GARDEN')
+                                   default='HOSE_GARDEN', options={'SKIP_SAVE'})
 
     def invoke(self, context, event):
         return self.execute(context)

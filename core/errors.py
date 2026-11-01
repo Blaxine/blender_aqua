@@ -103,12 +103,16 @@ def scrub(text):
     if blend:
         subs += [(v, "<blend-file>") for v in _variants(blend)]
         subs += [(v, "<blend-folder>") for v in _variants(os.path.dirname(blend))]
-        name = os.path.splitext(os.path.basename(blend))[0]
-        if len(name) > 2:
-            subs.append((name, "<blend-name>"))
     subs += [(v, "<home>") for v in _variants(os.path.expanduser("~"))]
     for old, new in subs:
         text = re.sub(re.escape(old), lambda _m: new, text, flags=re.IGNORECASE)
+    if blend:
+        # Whole word, exact case: a file called water.blend mustn't rewrite
+        # "Still Water" in the report.
+        name = os.path.splitext(os.path.basename(blend))[0]
+        if len(name) > 2:
+            text = re.sub(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])",
+                          lambda _m: "<blend-name>", text)
     # Any other user folder that slipped through (other drive letters, temp).
     text = re.sub(r"([A-Za-z]:[\\/]Users[\\/])[^\\/\s]+", r"\1<user>", text)
     text = re.sub(r"(/(?:home|Users)/)[^/\s]+", r"\1<user>", text)

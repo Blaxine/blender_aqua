@@ -77,7 +77,7 @@ def _restore_source(entry):
                         entry.src_display_type)
 
 
-def _release_effectors(assembly_uuid):
+def _release_effectors(assembly_uuid, objects=None):
     """Decrement effector refcounts; remove modifiers whose owner list empties
     (R1.4 / §5.3b).
 
@@ -85,7 +85,7 @@ def _release_effectors(assembly_uuid):
     created, so the modifier is identified by type — renaming it no longer
     strands it on the user's object.
     """
-    for obj in bpy.data.objects:
+    for obj in (bpy.data.objects if objects is None else objects):
         raw = obj.get(C.EFFECTOR_OWNERS_PROP)
         if not raw:
             continue
@@ -183,18 +183,69 @@ def remove_cache(assembly_uuid):
 # Teardown
 # --------------------------------------------------------------------------
 
+def _copies(scene, assembly_uuid):
+    """This setup in other scenes: copying a scene copies the uuid and tags too."""
+    return [e for s in bpy.data.scenes if s != scene
+            for e in s.aqs_assemblies if e.uuid == assembly_uuid]
+
+
+def _setup_contents(entry):
+    root = entry.root_collection if entry is not None else None
+    if root is None:
+        return set(), set()
+    return set(root.all_objects), {root, *root.children_recursive}
+
+
+def _delete_this_scene_only(scene, entry, assembly_uuid, copies):
+    """Remove this scene's copy; what the other scenes' copies use stays."""
+    from . import naming
+    d = bpy.data
+    keep_objects, keep_collections = set(), set()
+    for other in copies:
+        objects, collections = _setup_contents(other)
+        keep_objects |= objects
+        keep_collections |= collections
+    objects, collections = _setup_contents(entry)
+    for obj in objects - keep_objects:
+        if naming.owned_by(obj, assembly_uuid):
+            d.objects.remove(obj, do_unlink=True)
+    for col in collections - keep_collections:
+        d.collections.remove(col)
+    registry.remove(scene, assembly_uuid)
+    # Dependencies first release their users, so sweep until nothing changes.
+    groups = ("meshes", "particles", "node_groups", "materials", "actions", "lights", "worlds")
+    removed = True
+    while removed:
+        removed = False
+        for group in groups:
+            data = getattr(d, group)
+            for id_block in list(data):
+                if naming.owned_by(id_block, assembly_uuid) and id_block.users == 0:
+                    data.remove(id_block)
+                    removed = True
+
+
 def delete_assembly(scene, assembly_uuid, delete_cache=False):
     entry = registry.get(scene, assembly_uuid)
+    copies = _copies(scene, assembly_uuid)
     # Floaters keyed on this water go back where they were (they stay in
     # Floating Objects).
     from . import floating
-    floating.clear_water(assembly_uuid)
+    floating.clear_water(assembly_uuid, scene.objects if copies else None)
     if entry is not None:
         from . import lighting
         lighting.restore(scene, entry)
         _restore_buoys(entry)
         _restore_source(entry)
-    _release_effectors(assembly_uuid)
+        if entry.mode == C.MODE_SIMOCEAN:
+            from ..level2 import simulated_ocean
+            simulated_ocean.restore_timeline(scene, entry)
+    _release_effectors(assembly_uuid, scene.objects if copies else None)
+
+    if copies:
+        _delete_this_scene_only(scene, entry, assembly_uuid, copies)
+        _prune_empty(scene)
+        return
 
     d = bpy.data
     _remove_tagged(d.objects, assembly_uuid, lambda o: d.objects.remove(o, do_unlink=True))
@@ -215,11 +266,16 @@ def delete_assembly(scene, assembly_uuid, delete_cache=False):
     if delete_cache:
         remove_cache(assembly_uuid)
 
-    # Prune the root collection if it is now empty.
-    from . import naming
+    _prune_empty(scene)
+
+
+def _prune_empty(scene):
+    """Drop the root collection and an unused obstacles collection."""
+    from . import naming, obstacles
     for root in list(scene.collection.children):
         if root.get(naming.ROOT_PROP) and not root.children and not root.objects:
-            d.collections.remove(root)
+            bpy.data.collections.remove(root)
+    obstacles.prune(scene)
 
 
 def _owner_uuids():
@@ -243,7 +299,8 @@ def guarded_create(execute):
     @functools.wraps(execute)
     def wrapper(self, context):
         before = _owner_uuids()
-        from . import errors
+        from . import errors, handlers
+        handlers.note_range(context.scene)  # a tank may extend the timeline
         count = len(context.scene.aqs_assemblies)
         try:
             result = execute(self, context)

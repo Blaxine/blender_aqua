@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Liquid presets: all twelve apply, the "(modified)" marker, Set Up Render
+"""Liquid presets: all of them apply, the "(modified)" marker, Set Up Render
 Layers."""
 
 import os
@@ -31,7 +31,9 @@ def _create(mode, key):
 def test_catalogue():
     per_mode = {m: [k for k, p in presets.CATALOG.items() if p["mode"] == m]
                 for m in presets.LIQUID_MODES}
-    lib.check("three presets per liquid mode", all(len(v) == 3 for v in per_mode.values()),
+    lib.check("three presets per liquid mode, plus Still Water's eight real liquids",
+              {m: len(v) for m, v in per_mode.items()} == {
+                  C.MODE_STILL: 11, C.MODE_SIMRAIN: 3, C.MODE_HOSE: 3, C.MODE_SIMOCEAN: 3},
               str({m: len(v) for m, v in per_mode.items()}))
     lib.check("every mode has a default preset",
               all(presets.DEFAULTS[m] in per_mode[m] for m in presets.LIQUID_MODES))
@@ -58,7 +60,7 @@ def test_all_presets_apply():
                 bad.append(f"{key}: whitewater {flags} expected {wanted}")
         except Exception as exc:
             bad.append(f"{key}: {type(exc).__name__}: {exc}")
-    lib.check("all twelve presets apply their package", not bad, "; ".join(bad))
+    lib.check("all presets apply their package", not bad, "; ".join(bad))
     lib.check("no errors recorded while applying presets", not errors.pending(),
               str([e["title"] for e in errors.pending()]))
 
